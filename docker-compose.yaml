@@ -1,0 +1,102 @@
+services:
+  agile_manip_plan:
+    container_name: agile_manip_plan_container
+    hostname: agile_manip_plan
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    # Only the local (host-editable) packages are bind-mounted over the
+    # workspace. The Isaac ROS trees (isaac_ros_cumotion,
+    # isaac_ros_common_full, isaac_manipulator, isaac_ros_common_stub)
+    # are baked into the image by ``docker/Dockerfile`` and are not
+    # shadowed by any mount, so no entrypoint/symlink bootstrap is
+    # needed. Build artefacts (build/, install/, log/) live in the
+    # container's writable layer and are rebuilt with ``colcon build``.
+    volumes:
+      - ./colcon_ws/src/agile_manip_description:/colcon_ws/src/agile_manip_description
+      - ./colcon_ws/src/agile_manip_examples:/colcon_ws/src/agile_manip_examples
+      - ./colcon_ws/src/agile_manip_moveit_config:/colcon_ws/src/agile_manip_moveit_config
+      - ./colcon_ws/src/robotiq_2f_gripper_description:/colcon_ws/src/robotiq_2f_gripper_description
+      - ./colcon_ws/src/graspgen_ros:/colcon_ws/src/graspgen_ros
+      # GraspGen ships its demo meshes (object + gripper STLs) under
+      # graspgen_ros/share and publishes marker URIs like
+      # ``file:///share/obj_mesh/example.stl``. RViz resolves those URIs
+      # from its own filesystem, so the same mount has to be available
+      # inside this container as well.
+      - ./colcon_ws/src/graspgen_ros/share:/share:ro
+      - ./utils:/utils
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev:/dev
+    environment:
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - QT_X11_NO_MITSHM=1
+      # DDS isolation: the two containers sit on a private Docker bridge
+      # network (``agile_manip_net`` below) so nothing on the host (or in
+      # unrelated containers) sees our topics, and we do not see theirs.
+      # ``ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET`` confines discovery to
+      # the bridge's subnet; ``ROS_STATIC_PEERS`` is a fallback that
+      # uses the peer's hostname when Docker's bridge happens to block
+      # multicast discovery.
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+      - ROS_STATIC_PEERS=graspgen
+      - FASTDDS_SHM_DISABLE=1
+    privileged: true
+    networks:
+      - agile_manip_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    tty: true
+    stdin_open: true
+    command: bash -c "source /opt/ros/jazzy/setup.bash && cd /colcon_ws && colcon build && source install/setup.bash && bash"
+
+  graspgen:
+    container_name: graspgen_container
+    hostname: graspgen
+    build:
+      context: ./colcon_ws/src/graspgen_ros
+      dockerfile: docker/graspgen/Dockerfile
+    volumes:
+      - ./colcon_ws/src/graspgen_ros/share:/share
+      - ./colcon_ws/src/graspgen_ros/ros2_ws/graspgen_tutorials:/ros2_ws/src/graspgen_tutorials
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev:/dev
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      # Driver 535 natively supports CUDA 12.2; this container is CUDA 12.6.
+      # Bypass the strict cuda>=12.6 check so the container launches under
+      # Minor Version Compatibility mode.
+      - NVIDIA_DISABLE_REQUIRE=true
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      # Same DDS isolation settings as agile_manip_plan (see comments above).
+      - ROS_DOMAIN_ID=42
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+      - ROS_STATIC_PEERS=agile_manip_plan
+      - FASTDDS_SHM_DISABLE=1
+    privileged: true
+    networks:
+      - agile_manip_net
+    runtime: nvidia
+    tty: true
+    stdin_open: true
+    command: bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --executor sequential && source /ros2_ws/install/setup.bash && bash"
+
+# Dedicated bridge network so DDS traffic stays between these two
+# containers. Because we no longer use ``network_mode: host``, the
+# host's own ROS processes (and other containers on the default
+# bridge) are completely isolated from our DDS domain in both
+# directions.
+networks:
+  agile_manip_net:
+    driver: bridge

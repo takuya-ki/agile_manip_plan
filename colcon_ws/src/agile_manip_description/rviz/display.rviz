@@ -1,0 +1,109 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Value: true
+      Cell Size: 0.1
+      Plane Cell Count: 20
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Value: true
+      Description Topic:
+        Value: /robot_description
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Value: true
+      Show Names: false
+      Show Axes: true
+      Marker Scale: 0.4
+      Frames:
+        All Enabled: false
+        world: {Value: true}
+        object: {Value: true}
+        iiwa_base_link: {Value: true}
+      Tree: {}
+    # ======================================================================
+    # GraspGen server outputs (from /generate_grasp service, graspgen_ros)
+    # The server publishes the object mesh as marker id=0 in ns "object" and
+    # each grasp gripper mesh in ns "gripper" under /grasp_markers.
+    # ======================================================================
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Object + Grasp Candidates
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /graspgen/object_and_grippers
+        Depth: 5
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+    # ======================================================================
+    # cuMotion trajectory preview (cumotion_client) -- one demo node.
+    # ======================================================================
+    - Class: rviz_default_plugins/MarkerArray
+      Name: cuMotion Trajectory
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /cumotion/trajectory_markers
+        Depth: 5
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+    # ======================================================================
+    # Integrated GraspGen + cuMotion pipeline (grasp_and_motion_planner)
+    # ======================================================================
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Pipeline Markers
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /grasp_and_motion/markers
+        Depth: 5
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+    # Selected grasp is highlighted by recolouring the corresponding
+    # gripper mesh to red on the ``object_and_grippers`` topic; no
+    # separate Pose/arrow display is needed.
+    # ======================================================================
+    # Obstacle-aware pipeline (obstacle_aware_grasp_and_motion_planner)
+    # ======================================================================
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Obstacle-aware Pipeline Markers
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /obstacle_aware_grasp_and_motion/markers
+        Depth: 5
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+    - Class: rviz_default_plugins/Marker
+      Name: Static Obstacle
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /obstacle_aware_grasp_and_motion/obstacle_marker
+        Depth: 1
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+  Global Options:
+    Fixed Frame: world
+    Frame Rate: 30
+    Background Color: 48; 48; 48
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3.5
+      Focal Point:
+        X: 0.3
+        Y: 0.0
+        Z: 0.5
+      Yaw: 0.8
+      Pitch: 0.35
+      Name: Current View

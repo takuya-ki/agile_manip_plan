@@ -1,0 +1,12 @@
+cumotion_client:
+  ros__parameters:
+    move_group_action_name: "cumotion/move_group"
+    planner_group_name: "arm"
+    pipeline_id: "isaac_ros_cumotion"
+    planner_id: "cuMotion"
+    allowed_planning_time: 5.0
+    playback_period_sec: 0.05
+    # Tool pose clearly swings to the left side of the robot so the
+    # animation is visible; cuMotion converts the joint target into a
+    # pose via FK so null-space redundancy may change the final joints.
+    target_arm_joints: [1.2, -0.3, 0.0, -1.0, 0.0, 1.3, 0.0]

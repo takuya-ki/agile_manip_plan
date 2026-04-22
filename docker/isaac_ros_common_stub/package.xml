@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>isaac_ros_common</name>
+  <version>4.3.0</version>
+  <description>Stub exposing the isaac_ros_common resources needed by cuMotion (no VPI / NITROS).</description>
+  <maintainer email="noreply@anthropic.com">agile_manip_plan</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

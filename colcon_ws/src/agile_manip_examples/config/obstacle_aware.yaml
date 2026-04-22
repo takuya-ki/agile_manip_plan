@@ -1,0 +1,28 @@
+obstacle_aware_grasp_and_motion_planner:
+  ros__parameters:
+    grasp_service_name: "/generate_grasp"
+    move_group_action_name: "cumotion/move_group"
+    world_frame: "world"
+    object_frame: "object"
+    grasp_frame_prefix: "grasp_"
+    max_grasps: 32
+    max_consecutive_misses: 3
+    tf_lookup_timeout_sec: 0.2
+    result_collection_delay_sec: 0.5
+    grasp_result_path: "/colcon_ws/src/graspgen_ros/share/grasp_result/example_mesh_antipodal.yaml"
+    publish_object_identity_tf: true
+    planner_group_name: "arm"
+    pipeline_id: "isaac_ros_cumotion"
+    planner_id: "cuMotion"
+    end_effector_link: "grasp_frame"
+    allowed_planning_time: 5.0
+    selected_grasp_index: 0
+    selection_mode: "highest_confidence"
+    playback_period_sec: 0.05
+    # Tall thin wall between the robot base and the target object: the
+    # straight-line trajectory from HOME to the grasp pose would pass
+    # through this box, forcing cuMotion to plan a clearly different
+    # (over-the-top) detour compared with the obstacle-free demo 04.
+    obstacle_center_xyz: [0.25, 0.0, 0.40]
+    obstacle_size_xyz: [0.08, 0.40, 0.50]
+    obstacle_frame: "world"

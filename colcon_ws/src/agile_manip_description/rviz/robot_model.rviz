@@ -1,0 +1,38 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Value: true
+      Cell Size: 0.1
+      Plane Cell Count: 20
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Value: true
+      Description Topic:
+        Value: /robot_description
+    # TF display intentionally omitted from demo 01 — the pre-warmed
+    # grasp_* static transforms broadcast by graspgen_container are
+    # otherwise rendered here even though this demo only wants to show
+    # the robot model.
+  Global Options:
+    Fixed Frame: world
+    Frame Rate: 30
+    Background Color: 48; 48; 48
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3.5
+      Focal Point:
+        X: 0.3
+        Y: 0.0
+        Z: 0.5
+      Yaw: 0.8
+      Pitch: 0.35
+      Name: Current View

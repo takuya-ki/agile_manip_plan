@@ -1,0 +1,168 @@
+format: xrdf
+format_version: 1.0
+
+modifiers:
+  - add_frame:
+      frame_name: "attached_object"
+      parent_frame_name: "grasp_frame"
+      joint_name: "attach_joint"
+      joint_type: FIXED
+      fixed_transform:
+        position: [0.0, 0.0, 0.0]
+        orientation: {w: 1.0, xyz: [0.0, 0.0, 0.0]}
+
+default_joint_positions:
+  iiwa_joint_1: 0.0
+  iiwa_joint_2: 0.0
+  iiwa_joint_3: 0.0
+  iiwa_joint_4: -1.5708
+  iiwa_joint_5: 0.0
+  iiwa_joint_6: 1.5708
+  iiwa_joint_7: 0.0
+
+cspace:
+  joint_names:
+    - "iiwa_joint_1"
+    - "iiwa_joint_2"
+    - "iiwa_joint_3"
+    - "iiwa_joint_4"
+    - "iiwa_joint_5"
+    - "iiwa_joint_6"
+    - "iiwa_joint_7"
+  acceleration_limits: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
+  jerk_limits: [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0]
+
+# GraspGen publishes grasp poses in the frame where its Robotiq 2F-140
+# mesh origin sits (back of the gripper, mounted on the flange). The
+# matching URDF frame is ``grasp_frame``; keep it as the tool frame
+# so MoveIt pose targets line up with GraspGen candidates directly.
+tool_frames: ["grasp_frame"]
+
+collision:
+  geometry: "iiwa14_robotiq140_collision_spheres"
+  buffer_distance:
+    iiwa_base_link: 0.004
+    iiwa_link_1: 0.004
+    iiwa_link_2: 0.004
+    iiwa_link_3: 0.004
+    iiwa_link_4: 0.004
+    iiwa_link_5: 0.004
+    iiwa_link_6: 0.004
+    iiwa_link_7: 0.004
+    grasp_frame: 0.004
+    attached_object: 0.004
+
+self_collision:
+  geometry: "iiwa14_robotiq140_collision_spheres"
+  buffer_distance:
+    iiwa_base_link: 0.0
+    iiwa_link_1: 0.0
+    iiwa_link_2: 0.0
+    iiwa_link_3: 0.0
+    iiwa_link_4: 0.0
+    iiwa_link_5: 0.0
+    iiwa_link_6: 0.0
+    iiwa_link_7: 0.0
+    grasp_frame: 0.0
+  ignore:
+    # Approximate collision spheres are tuned for environment collision only;
+    # self-collision is disabled by ignoring every pair of links.
+    iiwa_base_link:
+      - "iiwa_link_1"
+      - "iiwa_link_2"
+      - "iiwa_link_3"
+      - "iiwa_link_4"
+      - "iiwa_link_5"
+      - "iiwa_link_6"
+      - "iiwa_link_7"
+      - "grasp_frame"
+      - "attached_object"
+    iiwa_link_1:
+      - "iiwa_link_2"
+      - "iiwa_link_3"
+      - "iiwa_link_4"
+      - "iiwa_link_5"
+      - "iiwa_link_6"
+      - "iiwa_link_7"
+      - "grasp_frame"
+      - "attached_object"
+    iiwa_link_2:
+      - "iiwa_link_3"
+      - "iiwa_link_4"
+      - "iiwa_link_5"
+      - "iiwa_link_6"
+      - "iiwa_link_7"
+      - "grasp_frame"
+      - "attached_object"
+    iiwa_link_3:
+      - "iiwa_link_4"
+      - "iiwa_link_5"
+      - "iiwa_link_6"
+      - "iiwa_link_7"
+      - "grasp_frame"
+      - "attached_object"
+    iiwa_link_4:
+      - "iiwa_link_5"
+      - "iiwa_link_6"
+      - "iiwa_link_7"
+      - "grasp_frame"
+      - "attached_object"
+    iiwa_link_5:
+      - "iiwa_link_6"
+      - "iiwa_link_7"
+      - "grasp_frame"
+      - "attached_object"
+    iiwa_link_6:
+      - "iiwa_link_7"
+      - "grasp_frame"
+      - "attached_object"
+    iiwa_link_7:
+      - "grasp_frame"
+      - "attached_object"
+    grasp_frame:
+      - "attached_object"
+
+geometry:
+  iiwa14_robotiq140_collision_spheres:
+    spheres:
+      iiwa_base_link:
+        - {"center": [0.0, 0.0, 0.08], "radius": 0.09}
+      iiwa_link_1:
+        - {"center": [0.0, 0.0, 0.0], "radius": 0.08}
+        - {"center": [0.0, 0.0, 0.1], "radius": 0.08}
+        - {"center": [0.0, -0.05, 0.15], "radius": 0.07}
+      iiwa_link_2:
+        - {"center": [0.0, 0.0, 0.0], "radius": 0.08}
+        - {"center": [0.0, 0.08, 0.05], "radius": 0.07}
+        - {"center": [0.0, 0.16, 0.0], "radius": 0.07}
+      iiwa_link_3:
+        - {"center": [0.0, 0.0, 0.0], "radius": 0.07}
+        - {"center": [0.0, 0.0, 0.1], "radius": 0.07}
+        - {"center": [0.0, -0.05, 0.17], "radius": 0.065}
+      iiwa_link_4:
+        - {"center": [0.0, 0.0, 0.0], "radius": 0.07}
+        - {"center": [0.0, 0.08, 0.05], "radius": 0.065}
+        - {"center": [0.0, 0.15, 0.0], "radius": 0.065}
+      iiwa_link_5:
+        - {"center": [0.0, 0.0, 0.0], "radius": 0.06}
+        - {"center": [0.0, 0.0, 0.1], "radius": 0.055}
+        - {"center": [0.0, -0.03, 0.17], "radius": 0.055}
+      iiwa_link_6:
+        - {"center": [0.0, 0.0, 0.0], "radius": 0.06}
+        - {"center": [0.0, 0.07, 0.0], "radius": 0.055}
+      iiwa_link_7:
+        - {"center": [0.0, 0.0, 0.02], "radius": 0.045}
+        - {"center": [0.0, 0.0, 0.045], "radius": 0.04}
+      # Robotiq 2F-140 rough envelope: ~20cm span laterally and ~21cm
+      # tall from flange to fingertips. Sphere chain covers the body
+      # plus both finger pads at the open (~14cm) stroke.
+      grasp_frame:
+        - {"center": [0.0, 0.0, 0.04], "radius": 0.05}
+        - {"center": [0.0, 0.0, 0.09], "radius": 0.05}
+        - {"center": [0.07, 0.0, 0.14], "radius": 0.035}
+        - {"center": [-0.07, 0.0, 0.14], "radius": 0.035}
+        - {"center": [0.07, 0.0, 0.19], "radius": 0.03}
+        - {"center": [-0.07, 0.0, 0.19], "radius": 0.03}
+      attached_object:
+        - {"center": [0.0, 0.0, 0.0], "radius": -10.0}
+        - {"center": [0.0, 0.0, 0.0], "radius": -10.0}

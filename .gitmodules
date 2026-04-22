@@ -1,0 +1,4 @@
+[submodule "colcon_ws/src/graspgen_ros"]
+	path = colcon_ws/src/graspgen_ros
+	url = https://github.com/UOsaka-Harada-Laboratory/graspgen_ros.git
+	branch = main

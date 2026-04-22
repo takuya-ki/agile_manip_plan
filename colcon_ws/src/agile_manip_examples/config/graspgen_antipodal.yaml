@@ -1,0 +1,12 @@
+graspgen_client:
+  ros__parameters:
+    grasp_service_name: "/generate_grasp"
+    world_frame: "world"
+    object_frame: "object"
+    grasp_frame_prefix: "grasp_"
+    max_grasps: 32
+    max_consecutive_misses: 3
+    tf_lookup_timeout_sec: 0.2
+    result_collection_delay_sec: 0.5
+    publish_object_identity_tf: true
+    grasp_result_path: "/colcon_ws/src/graspgen_ros/share/grasp_result/example_mesh_antipodal.yaml"
