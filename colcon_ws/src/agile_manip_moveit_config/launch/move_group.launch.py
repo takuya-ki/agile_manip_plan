@@ -60,6 +60,8 @@ def launch_setup(context, *args, **kwargs):
     controllers_file = os.path.join(moveit_dir, 'config', 'moveit_controllers.yaml')
     cumotion_planning_file = os.path.join(
         moveit_dir, 'config', 'isaac_ros_cumotion_planning.yaml')
+    ompl_planning_file = os.path.join(
+        moveit_dir, 'config', 'ompl_planning.yaml')
     rviz_file = os.path.join(desc_dir, 'rviz', 'display.rviz')
 
     # Articulated Robotiq 2F-140 URDF (with finger_joint + mimic joints)
@@ -92,6 +94,7 @@ def launch_setup(context, *args, **kwargs):
         robot_description_planning,
         _load_yaml(controllers_file),
         _load_yaml(cumotion_planning_file),
+        _load_yaml(ompl_planning_file),
         {
             'publish_planning_scene': True,
             'publish_geometry_updates': True,

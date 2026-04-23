@@ -267,6 +267,49 @@ Each run prints a summary on stdout and writes
 output path or any other parameter via the `ros2 run --ros-args -p`
 command that the wrapper expands.
 
+### Motion planner comparison
+
+Same pose goal, same scene, different motion planner. cuMotion
+(GPU, gradient-based) is compared against the two OMPL
+sampling-based baselines that ship with MoveIt: RRTConnect and
+RRTstar. All three pipelines run inside the same move_group, so the
+only difference is the `pipeline_id` / `planner_id` pair passed with
+the goal. Hardware: RTX 3090; 20 iterations; no obstacles.
+
+| Motion planner                  | pipeline_id / planner_id          | success | median (ms) | p95 (ms) | median traj. length (m) |
+|---------------------------------|-----------------------------------|---------|-------------|----------|-------------------------|
+| **cuMotion** (GPU, gradient)    | `isaac_ros_cumotion` / `cuMotion` | 20/20   | 205.0       | 247.1    | 0.932                   |
+| OMPL RRTConnect (CPU, sampling) | `ompl` / `RRTConnect`             | 20/20   | **161.0**   | 187.3    | 0.322                   |
+| OMPL RRTstar (CPU, sampling)    | `ompl` / `RRTstar`                | 20/20   | 173.5       | 221.5    | 0.270                   |
+
+Reading the numbers honestly: on this trivial free-space problem the
+OMPL sampling baselines edge out cuMotion, because cuMotion's CUDA
+kernel-launch / batch-setup overhead dominates when the actual
+optimisation is near-instant. cuMotion's advantage surfaces on
+cluttered scenes where sampling planners have to reject many
+candidate trajectories; an obstacle-rich version of this benchmark
+is a natural follow-up. The trajectories also differ in shape
+(cuMotion's is longer in joint-space here because it smooths towards
+a dynamically-feasible minimum-jerk path, while RRT* post-processes
+for minimum length only); compare them qualitatively in RViz by
+running each demo.
+
+Reproduce:
+
+```bash
+bash utils/start_backends.sh
+bash utils/run_benchmark.sh highest_confidence 20       # default pipeline
+# Override pipeline / planner from the command line:
+docker exec -it agile_manip_plan_container bash -c "\
+    source /opt/ros/jazzy/setup.bash && \
+    source /colcon_ws/install/setup.bash && \
+    ros2 run agile_manip_examples benchmark_harness --ros-args \
+        --params-file /colcon_ws/install/agile_manip_examples/share/agile_manip_examples/config/benchmark.yaml \
+        -p pipeline_id:=ompl -p planner_id:=RRTConnect \
+        -p allowed_planning_time:=5.0 -p iterations:=20"
+bash utils/stop_backends.sh
+```
+
 ### Dynamic replanning rate
 
 The dynamic replanning demo exercises a tighter closed loop: a fresh

@@ -1,7 +1,15 @@
+# Declares both planning pipelines that move_group should expose:
+#   - ``isaac_ros_cumotion`` (GPU, gradient-based -- default)
+#   - ``ompl`` (CPU, sampling-based; individual algorithms selected via
+#     ``planner_id`` at request time)
+#
+# The ``ompl`` pipeline's planner_configs and per-group settings live in
+# ``ompl_planning.yaml`` which is loaded alongside this file.
 planning_pipelines:
   default_planning_pipeline: isaac_ros_cumotion
   pipeline_names:
     - isaac_ros_cumotion
+    - ompl
 
 isaac_ros_cumotion:
   planning_plugins:
