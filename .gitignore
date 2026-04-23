@@ -13,6 +13,5 @@ colcon_ws/log/
 CLAUDE.md
 .codex
 
-# Temporary interactive verification helpers -- intentionally untracked.
 utils/record_demo.sh
 dataset/video/
