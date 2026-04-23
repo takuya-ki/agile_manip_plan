@@ -42,6 +42,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Cache tuning to keep the GHA cache small:
+      #   - ``mode=min``: only final-image layers are cached, not every
+      #     intermediate build stage. Cuts the cache size significantly
+      #     for the CUDA-heavy base image.
+      #   - ``scope`` keyed on the Dockerfile hash: when the Dockerfile
+      #     changes, a fresh cache key is used; old entries stop being
+      #     referenced and GHA evicts them automatically (the 10 GB
+      #     per-repo LRU limit kicks in on unused entries).
+      - name: Compute Dockerfile hash
+        id: dfhash
+        run: echo "hash=$(sha256sum docker/Dockerfile | cut -c1-12)" >> $GITHUB_OUTPUT
+
       - name: Build image (no push)
         uses: docker/build-push-action@v6
         with:
@@ -49,5 +61,5 @@ jobs:
           file: docker/Dockerfile
           push: false
           tags: agile_manip_plan:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=docker-${{ steps.dfhash.outputs.hash }}
+          cache-to: type=gha,scope=docker-${{ steps.dfhash.outputs.hash }},mode=min
