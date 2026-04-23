@@ -1,7 +1,7 @@
 """Integrated GraspGen -> cuMotion example using the real ROS interfaces."""
 
 import rclpy
-from geometry_msgs.msg import Point, PoseArray, PoseStamped
+from geometry_msgs.msg import PoseArray, PoseStamped
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import MoveItErrorCodes
 from rclpy.action import ActionClient
@@ -11,18 +11,15 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 from std_srvs.srv import Empty
 from tf2_ros import Buffer, StaticTransformBroadcaster, TransformListener
-from visualization_msgs.msg import Marker, MarkerArray
+from visualization_msgs.msg import MarkerArray
 
 from agile_manip_examples.cumotion_utils import (
-    GRIPPER_OPEN,
     HOME_ARM_JOINTS,
     HOME_JOINTS,
     JOINT_NAMES,
     build_pose_goal,
     expand_robot_trajectory,
-    grasp_frame_xyz,
     moveit_error_name,
-    width_to_finger_joint,
 )
 from agile_manip_examples.graspgen_utils import (
     GraspMarkerForwarder,
@@ -31,6 +28,12 @@ from agile_manip_examples.graspgen_utils import (
     load_grasp_scores,
     make_identity_transform,
     transform_available,
+)
+from agile_manip_examples.planning_helpers import (
+    build_trajectory_path_marker,
+    log_goal_residual,
+    order_grasp_candidates,
+    resolve_gripper_value,
 )
 
 class GraspAndMotionPlanner(Node):
@@ -114,10 +117,10 @@ class GraspAndMotionPlanner(Node):
 
     def _gripper_value(self):
         """Resolve the current gripper target (rad) from parameters."""
-        width = float(self.get_parameter('gripper_width_m').value)
-        if width >= 0.0:
-            return width_to_finger_joint(width)
-        return float(self.get_parameter('gripper_finger_joint_target').value)
+        return resolve_gripper_value(
+            self.get_parameter('gripper_width_m').value,
+            self.get_parameter('gripper_finger_joint_target').value,
+        )
 
     def start_pipeline(self):
         """Wait for both backends and kick off GraspGen first."""
@@ -231,19 +234,11 @@ class GraspAndMotionPlanner(Node):
 
     def ordered_grasp_candidates(self, grasp_candidates):
         """Return ``(original_index, candidate)`` pairs in selection order."""
-        selection_mode = self.get_parameter('selection_mode').value
-        indexed = list(enumerate(grasp_candidates))
-        if selection_mode == 'highest_confidence':
-            scored = [(i, c) for i, c in indexed if c.confidence is not None]
-            unscored = [(i, c) for i, c in indexed if c.confidence is None]
-            scored.sort(key=lambda entry: entry[1].confidence, reverse=True)
-            return scored + unscored
-
-        start_index = min(
-            max(0, int(self.get_parameter('selected_grasp_index').value)),
-            len(grasp_candidates) - 1,
+        return order_grasp_candidates(
+            grasp_candidates,
+            self.get_parameter('selection_mode').value,
+            self.get_parameter('selected_grasp_index').value,
         )
-        return indexed[start_index:] + indexed[:start_index]
 
     def plan_next_candidate(self):
         """Pop the next candidate from the queue and request a plan."""
@@ -326,26 +321,12 @@ class GraspAndMotionPlanner(Node):
         )
 
     def publish_trajectory_markers(self):
-        stamp = self.get_clock().now().to_msg()
         marker_array = MarkerArray()
-
-        path_marker = Marker()
-        path_marker.header.frame_id = self.get_parameter('world_frame').value
-        path_marker.header.stamp = stamp
-        path_marker.ns = 'trajectory_path'
-        path_marker.id = 1
-        path_marker.type = Marker.LINE_STRIP
-        path_marker.action = Marker.ADD
-        path_marker.scale.x = 0.005
-        path_marker.color.r = 0.0
-        path_marker.color.g = 0.6
-        path_marker.color.b = 1.0
-        path_marker.color.a = 0.8
-        for joints in self.trajectory:
-            x, y, z = grasp_frame_xyz(joints)
-            path_marker.points.append(Point(x=x, y=y, z=z))
-        marker_array.markers.append(path_marker)
-
+        marker_array.markers.append(build_trajectory_path_marker(
+            self.trajectory,
+            self.get_parameter('world_frame').value,
+            self.get_clock().now().to_msg(),
+        ))
         # The selected grasp itself is highlighted on the gripper mesh
         # via ``marker_forwarder.highlight_gripper``; no extra marker needed.
         self.marker_pub.publish(marker_array)
@@ -366,23 +347,8 @@ class GraspAndMotionPlanner(Node):
 
     def _verify_goal_reached(self):
         """Log gripper-base-to-grasp residual (the link cuMotion targeted)."""
-        if self.selected_pose is None:
-            return
-        final = self.trajectory[-1]
-        bx, by, bz = grasp_frame_xyz(final)
-        gx = self.selected_pose.position.x
-        gy = self.selected_pose.position.y
-        gz = self.selected_pose.position.z
-        residual = ((bx - gx) ** 2 + (by - gy) ** 2 + (bz - gz) ** 2) ** 0.5
-        if residual < 0.02:
-            self.get_logger().info(
-                f'Reached selected grasp pose (gripper-base residual '
-                f'{residual*1000:.1f} mm).')
-        else:
-            self.get_logger().warn(
-                f'Trajectory end is {residual*1000:.1f} mm away from the '
-                f'selected grasp pose (gripper_base=({bx:.3f},{by:.3f},'
-                f'{bz:.3f}), grasp=({gx:.3f},{gy:.3f},{gz:.3f})).')
+        log_goal_residual(
+            self.get_logger(), self.trajectory, self.selected_pose)
 
 
 def main(args=None):

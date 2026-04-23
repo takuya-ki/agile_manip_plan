@@ -4,6 +4,7 @@ __pycache__/
 colcon_ws/build/
 colcon_ws/install/
 colcon_ws/log/
+.pytest_cache/
 
 .vscode/
 .claude/
@@ -11,3 +12,7 @@ colcon_ws/log/
 
 CLAUDE.md
 .codex
+
+# Temporary interactive verification helpers -- intentionally untracked.
+utils/record_demo.sh
+dataset/video/
