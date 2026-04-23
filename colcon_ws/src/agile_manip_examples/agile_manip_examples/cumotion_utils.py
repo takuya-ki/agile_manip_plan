@@ -32,23 +32,40 @@ GRIPPER_JOINT_NAME = 'finger_joint'
 GRIPPER_OPEN = 0.0
 GRIPPER_CLOSED = 0.7
 
+# Physical stroke of the Robotiq 2F-140 fingertips, in metres.
+# Exposed as a module constant (rather than buried in a function body)
+# so callers that want to override it for a different gripper variant
+# can pass ``max_width_m`` to :func:`width_to_finger_joint`.
+GRIPPER_MAX_WIDTH_M = 0.140
+
+# Default goal tolerances applied in :func:`make_pose_constraints`.
+# Kept loose enough that cuMotion almost always finds a solution while
+# still placing the TCP close enough that downstream grasping succeeds.
+# Values are parameters (not hard-coded in the function body) because
+# different tasks trade tightness vs. planning success rate differently:
+#   - Dense-clutter picks benefit from tighter tolerances (a few mm).
+#   - Fast-cycle free-space moves can accept looser values for speed.
+DEFAULT_POSITION_TOLERANCE_M = 0.005
+DEFAULT_ORIENTATION_TOLERANCE_RAD = 0.05
+
 JOINT_NAMES = ARM_JOINT_NAMES + (GRIPPER_JOINT_NAME,)
 
 HOME_ARM_JOINTS = [0.0, 0.0, 0.0, -math.pi / 2, 0.0, math.pi / 2, 0.0]
 HOME_JOINTS = HOME_ARM_JOINTS + [GRIPPER_OPEN]
 
 
-def width_to_finger_joint(width_m):
+def width_to_finger_joint(width_m, max_width_m=GRIPPER_MAX_WIDTH_M):
     """Convert a desired jaw opening (in metres) to finger_joint (rad).
 
     The Robotiq 2F-140 has a ~140 mm stroke, so width_m=0.14 ≈ fully
     open and width_m=0.0 ≈ fully closed. The mapping is approximately
-    linear against the driving joint angle.
+    linear against the driving joint angle. ``max_width_m`` is exposed
+    for gripper variants (2F-85, custom fingertips) with a different
+    stroke; keep the default for the stock 2F-140.
     """
-    max_width = 0.140
-    clamped = max(0.0, min(max_width, float(width_m)))
+    clamped = max(0.0, min(float(max_width_m), float(width_m)))
     # Inverse of approx. linear relation (open stroke ↔ joint angle):
-    return GRIPPER_CLOSED * (1.0 - clamped / max_width)
+    return GRIPPER_CLOSED * (1.0 - clamped / float(max_width_m))
 
 
 def make_start_state(joint_names, joint_positions):
@@ -74,8 +91,20 @@ def make_joint_constraints(joint_names, joint_positions):
     return constraints
 
 
-def make_pose_constraints(frame_id, end_effector_link, target_pose):
-    """Build pose constraints for a MoveGroup goal."""
+def make_pose_constraints(
+        frame_id,
+        end_effector_link,
+        target_pose,
+        position_tolerance_m=DEFAULT_POSITION_TOLERANCE_M,
+        orientation_tolerance_rad=DEFAULT_ORIENTATION_TOLERANCE_RAD):
+    """Build pose constraints for a MoveGroup goal.
+
+    ``position_tolerance_m`` is the radius of the sphere that the end
+    effector link must land inside. ``orientation_tolerance_rad`` is
+    applied identically to each of the three axes. Both are exposed so
+    callers can trade tightness vs. planning success rate at the ROS
+    parameter layer without editing this file.
+    """
     constraints = Constraints()
 
     position_constraint = PositionConstraint()
@@ -83,7 +112,7 @@ def make_pose_constraints(frame_id, end_effector_link, target_pose):
     position_constraint.link_name = end_effector_link
     primitive = SolidPrimitive()
     primitive.type = SolidPrimitive.SPHERE
-    primitive.dimensions = [0.005]
+    primitive.dimensions = [float(position_tolerance_m)]
     position_constraint.constraint_region.primitives.append(primitive)
     position_constraint.constraint_region.primitive_poses.append(target_pose)
     position_constraint.weight = 1.0
@@ -93,9 +122,9 @@ def make_pose_constraints(frame_id, end_effector_link, target_pose):
     orientation_constraint.header.frame_id = frame_id
     orientation_constraint.link_name = end_effector_link
     orientation_constraint.orientation = target_pose.orientation
-    orientation_constraint.absolute_x_axis_tolerance = 0.05
-    orientation_constraint.absolute_y_axis_tolerance = 0.05
-    orientation_constraint.absolute_z_axis_tolerance = 0.05
+    orientation_constraint.absolute_x_axis_tolerance = float(orientation_tolerance_rad)
+    orientation_constraint.absolute_y_axis_tolerance = float(orientation_tolerance_rad)
+    orientation_constraint.absolute_z_axis_tolerance = float(orientation_tolerance_rad)
     orientation_constraint.weight = 1.0
     constraints.orientation_constraints.append(orientation_constraint)
 
@@ -134,8 +163,15 @@ def build_pose_goal(
         world_frame,
         start_joint_positions,
         target_pose,
-        allowed_planning_time):
-    """Create a pose goal for cuMotion."""
+        allowed_planning_time,
+        position_tolerance_m=DEFAULT_POSITION_TOLERANCE_M,
+        orientation_tolerance_rad=DEFAULT_ORIENTATION_TOLERANCE_RAD):
+    """Create a pose goal for cuMotion.
+
+    The two tolerance arguments are optional and keep the historical
+    defaults, so existing call sites do not need to change. Callers that
+    expose ROS parameters for the tolerances can forward them here.
+    """
     goal_msg = MoveGroup.Goal()
     goal_msg.request.group_name = group_name
     goal_msg.request.pipeline_id = pipeline_id
@@ -147,7 +183,13 @@ def build_pose_goal(
     goal_msg.request.start_state = make_start_state(
         ARM_JOINT_NAMES, start_joint_positions)
     goal_msg.request.goal_constraints.append(
-        make_pose_constraints(world_frame, end_effector_link, target_pose))
+        make_pose_constraints(
+            world_frame,
+            end_effector_link,
+            target_pose,
+            position_tolerance_m=position_tolerance_m,
+            orientation_tolerance_rad=orientation_tolerance_rad,
+        ))
     goal_msg.planning_options.plan_only = True
     return goal_msg
 

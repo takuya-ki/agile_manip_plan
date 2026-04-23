@@ -61,6 +61,12 @@ class GraspAndMotionPlanner(Node):
         self.declare_parameter('selected_grasp_index', 0)
         self.declare_parameter('selection_mode', 'highest_confidence')
         self.declare_parameter('playback_period_sec', 0.05)
+        # Pose goal tolerances -- exposed so tasks that need tighter or
+        # looser placement (dense clutter vs. fast free-space moves) can
+        # tune them without editing ``cumotion_utils.py``. Defaults match
+        # the previous hard-coded values so behaviour is unchanged.
+        self.declare_parameter('position_tolerance_m', 0.005)
+        self.declare_parameter('orientation_tolerance_rad', 0.05)
         # Gripper is driven independently of cuMotion (which only plans
         # the 7 iiwa joints). Keep it fully open during the demo by
         # default; set ``gripper_finger_joint_target`` (rad, 0 .. ~0.7)
@@ -263,6 +269,8 @@ class GraspAndMotionPlanner(Node):
             HOME_ARM_JOINTS,
             self.selected_pose,
             self.get_parameter('allowed_planning_time').value,
+            position_tolerance_m=self.get_parameter('position_tolerance_m').value,
+            orientation_tolerance_rad=self.get_parameter('orientation_tolerance_rad').value,
         )
         self.get_logger().info(
             f'Sending grasp {selected_index} to cuMotion '

@@ -74,6 +74,10 @@ class ObstacleAwareGraspAndMotionPlanner(Node):
         self.declare_parameter('selected_grasp_index', 0)
         self.declare_parameter('selection_mode', 'highest_confidence')
         self.declare_parameter('playback_period_sec', 0.05)
+        # See grasp_and_motion_planner.py for rationale; defaults match
+        # the previous hard-coded values.
+        self.declare_parameter('position_tolerance_m', 0.005)
+        self.declare_parameter('orientation_tolerance_rad', 0.05)
         # Static box obstacle fed to MoveIt's planning scene. Position
         # and size are tuned so that a naive straight-line approach from
         # the iiwa home pose to the grasp point is blocked, forcing
@@ -345,6 +349,8 @@ class ObstacleAwareGraspAndMotionPlanner(Node):
             HOME_ARM_JOINTS,
             self.selected_pose,
             self.get_parameter('allowed_planning_time').value,
+            position_tolerance_m=self.get_parameter('position_tolerance_m').value,
+            orientation_tolerance_rad=self.get_parameter('orientation_tolerance_rad').value,
         )
         if self._obstacle_collision_object is not None:
             goal_msg.planning_options.planning_scene_diff.is_diff = True
