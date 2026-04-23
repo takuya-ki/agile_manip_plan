@@ -77,9 +77,8 @@ class ObstacleAwareGraspAndMotionPlanner(Node):
         self.declare_parameter('selected_grasp_index', 0)
         # See grasp_and_motion_planner.py for rationale.
         self.declare_parameter('selection_mode', 'highest_confidence')
-        self.declare_parameter('multi_criteria_weight_confidence', 0.6)
-        self.declare_parameter('multi_criteria_weight_reach', 0.25)
-        self.declare_parameter('multi_criteria_weight_height', 0.15)
+        self.declare_parameter('multi_criteria_weight_confidence', 0.7)
+        self.declare_parameter('multi_criteria_weight_reach', 0.3)
         self.declare_parameter('playback_period_sec', 0.05)
         # See grasp_and_motion_planner.py for rationale; defaults match
         # the previous hard-coded values.
@@ -330,8 +329,6 @@ class ObstacleAwareGraspAndMotionPlanner(Node):
                     'multi_criteria_weight_confidence').value,
                 'reach': self.get_parameter(
                     'multi_criteria_weight_reach').value,
-                'height': self.get_parameter(
-                    'multi_criteria_weight_height').value,
             },
         )
 

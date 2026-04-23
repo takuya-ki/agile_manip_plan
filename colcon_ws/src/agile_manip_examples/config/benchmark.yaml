@@ -1,0 +1,31 @@
+benchmark_harness:
+  ros__parameters:
+    grasp_service_name: "/generate_grasp"
+    move_group_action_name: "cumotion/move_group"
+    world_frame: "world"
+    object_frame: "object"
+    grasp_frame_prefix: "grasp_"
+    max_grasps: 32
+    max_consecutive_misses: 3
+    tf_lookup_timeout_sec: 0.2
+    result_collection_delay_sec: 0.5
+    grasp_result_path: "/colcon_ws/src/graspgen_ros/share/grasp_result/example_mesh_antipodal.yaml"
+    publish_object_identity_tf: true
+    planner_group_name: "arm"
+    pipeline_id: "isaac_ros_cumotion"
+    planner_id: "cuMotion"
+    end_effector_link: "grasp_frame"
+    allowed_planning_time: 5.0
+    position_tolerance_m: 0.005
+    orientation_tolerance_rad: 0.05
+
+    # Selection mode to benchmark: highest_confidence | multi_criteria | manual
+    selection_mode: "highest_confidence"
+    selected_grasp_index: 0
+    multi_criteria_weight_confidence: 0.7
+    multi_criteria_weight_reach: 0.3
+
+    # Benchmark control
+    iterations: 20
+    # output_csv: "/tmp/benchmark_<timestamp>.csv"   # generated if empty
+    sleep_between_iterations_sec: 0.2

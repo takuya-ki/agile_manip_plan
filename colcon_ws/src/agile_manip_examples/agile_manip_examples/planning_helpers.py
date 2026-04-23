@@ -42,45 +42,36 @@ def _reachability_score(pose):
     return 0.5 * (1.0 + math.cos(math.pi * delta / REACH_FALLOFF_M))
 
 
-def _height_preference_score(pose):
-    """Return 0..1 score favouring top-down approaches.
-
-    A grasp whose approach axis points straight down (local +z of the
-    grasp frame aligned with world -z) scores 1.0; a side-approach
-    scores 0.5; an upward approach scores 0.0. Uses the quaternion's
-    rotation of the +z axis to avoid depending on scipy/numpy here.
-    """
-    q = pose.orientation
-    # Rotate +z body axis into world: z_world_z = 1 - 2 * (qx^2 + qy^2).
-    z_component = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
-    # Map [-1, 1] (up..down) to [0, 1] so downward approach wins.
-    return max(0.0, min(1.0, 0.5 * (1.0 - z_component)))
-
-
 def score_grasp_candidate(candidate,
-                          weight_confidence=0.6,
-                          weight_reach=0.25,
-                          weight_height=0.15):
+                          weight_confidence=0.7,
+                          weight_reach=0.3):
     """Combined score for multi-criteria grasp ranking.
 
-    Returns a weighted sum of the confidence, reachability, and
-    height-preference sub-scores. All sub-scores are normalised to
-    [0, 1]; weights are supplied by the caller (typically from ROS
-    parameters) and should sum to 1.0 for an interpretable score --
-    but they are not enforced so callers can experiment.
+    Returns a weighted sum of the confidence and reachability
+    sub-scores. Both are normalised to [0, 1]; weights are supplied
+    by the caller (typically from ROS parameters) and should sum to
+    1.0 for an interpretable score -- but they are not enforced so
+    callers can experiment.
+
+    Only task-agnostic geometric criteria are included here:
+    ``confidence`` is GraspGen's own success-probability estimate,
+    and ``reach`` favours grasps inside the iiwa14's comfortable
+    reach envelope (a property of the robot, not the task).
+    Task-specific heuristics (top-down preference, specific approach
+    directions, clearance to obstacles) should be added by composing
+    this helper with a user-provided scorer rather than baking them
+    in here.
 
     ``candidate.confidence`` may be ``None`` for grasps that were not
     accompanied by a GraspGen score file; such grasps contribute 0 to
-    the confidence term but are still ranked on reach / height.
+    the confidence term but are still ranked on reach.
     """
     confidence = (
         float(candidate.confidence) if candidate.confidence is not None else 0.0)
     reach = _reachability_score(candidate.pose)
-    height = _height_preference_score(candidate.pose)
     return (
         float(weight_confidence) * confidence
         + float(weight_reach) * reach
-        + float(weight_height) * height
     )
 
 
@@ -93,9 +84,9 @@ def order_grasp_candidates(grasp_candidates, selection_mode, selected_grasp_inde
     - ``'highest_confidence'`` (default in existing configs): scored
       grasps sorted by descending confidence, then unscored grasps.
     - ``'multi_criteria'``: scored by :func:`score_grasp_candidate`
-      which combines confidence, reachability, and height preference.
-      ``multi_criteria_weights`` is a dict ``{'confidence', 'reach',
-      'height'}``; defaults are used when omitted.
+      which combines GraspGen confidence with a reachability term.
+      ``multi_criteria_weights`` is a dict ``{'confidence', 'reach'}``;
+      defaults are used when omitted.
     - Anything else (``'manual'``): put ``selected_grasp_index`` first,
       then the remaining candidates in confidence-descending order so
       fallback is still meaningful if the chosen pose fails IK.
@@ -115,9 +106,8 @@ def order_grasp_candidates(grasp_candidates, selection_mode, selected_grasp_inde
         scored_entries = [
             (score_grasp_candidate(
                 c,
-                weight_confidence=weights.get('confidence', 0.6),
-                weight_reach=weights.get('reach', 0.25),
-                weight_height=weights.get('height', 0.15),
+                weight_confidence=weights.get('confidence', 0.7),
+                weight_reach=weights.get('reach', 0.3),
             ), i, c)
             for i, c in indexed
         ]

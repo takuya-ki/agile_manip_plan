@@ -167,6 +167,76 @@ bash utils/run_obstacle_aware_demo.sh
 ros2 launch agile_manip_examples obstacle_aware_demo.launch.py
 ```
 
+## Benchmark
+
+A headless [`benchmark_harness`](colcon_ws/src/agile_manip_examples/agile_manip_examples/benchmark_harness.py)
+node replays the GraspGen + cuMotion plan request `iterations` times
+and writes per-iteration metrics (planning time, waypoints, trajectory
+length, final residual, error code) to a CSV. Use it to quantify the
+"ultra-fast planning" claim and to compare grasp-selection strategies
+on a common workload.
+
+### Results
+
+Planning-only timing (cuMotion pose goal from home joint configuration
+to a GraspGen pose, 20 iterations, single pre-warmed grasp set of 32
+candidates). Hardware: **NVIDIA GeForce RTX 3090 (24 GB, CUDA 12.6)**.
+
+Two strategies are compared for choosing *which* GraspGen candidate to
+plan to (both use the same cuMotion planner with identical settings):
+
+- **Confidence-first**: sort by GraspGen confidence, try the highest
+  score first -- the default in existing launches.
+- **Multi-criteria**: weighted score combining GraspGen confidence
+  with a reachability sub-score that favours grasps inside the
+  iiwa14's comfortable reach envelope (peaks at 0.5 m from the base,
+  smoothly decaying with a cosine window). Weights are ROS
+  parameters; both terms are intentionally task-agnostic.
+
+*On confidence*: this is not a value this repository computes.
+GraspGen's own neural network outputs a success-probability estimate
+in `[0, 1]` for every candidate it generates; those values are
+written out alongside the grasp poses to the YAML at
+`grasp_result_path` (e.g.
+`/colcon_ws/src/graspgen_ros/share/grasp_result/example_mesh_antipodal.yaml`),
+and [`load_grasp_scores`](colcon_ws/src/agile_manip_examples/agile_manip_examples/graspgen_utils.py)
+just reads them. The score reflects what GraspGen's model learned
+about grasp stability on the object mesh.
+
+| Grasp selection strategy        | success | median (ms) | mean (ms) | p95 (ms) | min-max (ms)   | median traj. length (m) | max residual (mm) |
+|---------------------------------|---------|-------------|-----------|----------|----------------|-------------------------|-------------------|
+| Confidence-first                | 20/20   | **192.1**   | 193.2     | 211.1    | 180.8 – 211.5  | 0.662                   | 0.01              |
+| Multi-criteria (conf + reach)   | 20/20   | **160.3**   | 168.2     | 201.4    | 153.4 – 201.6  | 0.585                   | 0.01              |
+
+Both strategies land within 0.01 mm of the requested pose. Total
+per-cycle time is dominated by the MoveGroup action round-trip (the
+cuMotion solve itself is well below that budget). In this scene
+Multi-criteria picks a reach-biased grasp that yields a shorter
+trajectory and a faster overall plan on the median, illustrating
+that confidence alone does not always pick the cheapest candidate;
+tuning `multi_criteria_weight_{confidence,reach}` lets you slide
+between them.
+
+### Reproduce
+
+```bash
+# Host
+docker compose up -d
+bash utils/start_backends.sh
+
+# 20 iterations per mode (default config lives in
+# colcon_ws/src/agile_manip_examples/config/benchmark.yaml)
+bash utils/run_benchmark.sh highest_confidence 20
+bash utils/run_benchmark.sh multi_criteria 20
+
+bash utils/stop_backends.sh
+```
+
+Each run prints a summary on stdout and writes
+`/tmp/benchmark_<timestamp>.csv` inside the container. Override the
+output path or any other parameter via the `ros2 run --ros-args -p`
+command that the wrapper expands.
+
 ## Directory structure
 
 ```text

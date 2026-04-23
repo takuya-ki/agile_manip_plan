@@ -234,7 +234,7 @@ def test_multi_criteria_weights_can_disable_confidence():
     ]
     ordered = planning_helpers.order_grasp_candidates(
         candidates, 'multi_criteria', 0,
-        multi_criteria_weights={'confidence': 0.0, 'reach': 1.0, 'height': 0.0})
+        multi_criteria_weights={'confidence': 0.0, 'reach': 1.0})
     assert [i for i, _ in ordered] == [1, 0]
 
 
