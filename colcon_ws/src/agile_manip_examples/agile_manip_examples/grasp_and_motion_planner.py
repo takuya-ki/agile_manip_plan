@@ -62,7 +62,13 @@ class GraspAndMotionPlanner(Node):
         self.declare_parameter('end_effector_link', 'grasp_frame')
         self.declare_parameter('allowed_planning_time', 5.0)
         self.declare_parameter('selected_grasp_index', 0)
+        # 'highest_confidence' (default) | 'multi_criteria' | 'manual'.
+        # multi_criteria blends confidence with reachability and a
+        # top-down preference; weights are tunable below.
         self.declare_parameter('selection_mode', 'highest_confidence')
+        self.declare_parameter('multi_criteria_weight_confidence', 0.6)
+        self.declare_parameter('multi_criteria_weight_reach', 0.25)
+        self.declare_parameter('multi_criteria_weight_height', 0.15)
         self.declare_parameter('playback_period_sec', 0.05)
         # Pose goal tolerances -- exposed so tasks that need tighter or
         # looser placement (dense clutter vs. fast free-space moves) can
@@ -238,6 +244,14 @@ class GraspAndMotionPlanner(Node):
             grasp_candidates,
             self.get_parameter('selection_mode').value,
             self.get_parameter('selected_grasp_index').value,
+            multi_criteria_weights={
+                'confidence': self.get_parameter(
+                    'multi_criteria_weight_confidence').value,
+                'reach': self.get_parameter(
+                    'multi_criteria_weight_reach').value,
+                'height': self.get_parameter(
+                    'multi_criteria_weight_height').value,
+            },
         )
 
     def plan_next_candidate(self):

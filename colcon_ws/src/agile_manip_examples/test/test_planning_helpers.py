@@ -110,15 +110,26 @@ from agile_manip_examples import planning_helpers  # noqa: E402
 @dataclass
 class FakeCandidate:
     confidence: float | None
+    pose: object = None
+
+
+def _pose(x=0.0, y=0.0, z=0.0, qx=0.0, qy=0.0, qz=0.0, qw=1.0):
+    pose = _StubPose()
+    pose.position = _StubPoint(x, y, z)
+    pose.orientation = types.SimpleNamespace(x=qx, y=qy, z=qz, w=qw)
+    return pose
 
 
 @pytest.fixture
 def sample_candidates():
+    # Poses land near the reach sweet spot so multi_criteria tests can
+    # still discriminate on confidence; specific XYZ values don't affect
+    # the highest_confidence / manual modes.
     return [
-        FakeCandidate(confidence=0.10),
-        FakeCandidate(confidence=None),
-        FakeCandidate(confidence=0.80),
-        FakeCandidate(confidence=0.50),
+        FakeCandidate(confidence=0.10, pose=_pose(0.5, 0.0, 0.0)),
+        FakeCandidate(confidence=None, pose=_pose(0.5, 0.0, 0.0)),
+        FakeCandidate(confidence=0.80, pose=_pose(0.5, 0.0, 0.0)),
+        FakeCandidate(confidence=0.50, pose=_pose(0.5, 0.0, 0.0)),
     ]
 
 
@@ -143,11 +154,26 @@ def test_highest_confidence_preserves_pairing(sample_candidates):
         assert sample_candidates[original_idx] is candidate
 
 
-def test_manual_index_rotates_list(sample_candidates):
+def test_manual_starts_with_picked_index_and_falls_back_by_confidence(
+        sample_candidates):
+    # User picks index 2. If that grasp fails IK, the remaining grasps
+    # should be tried in descending confidence: 3 (0.50), 0 (0.10),
+    # 1 (None) -- not a mindless numeric rotation.
     ordered = planning_helpers.order_grasp_candidates(
         sample_candidates, selection_mode='manual',
         selected_grasp_index=2)
     assert [idx for idx, _ in ordered] == [2, 3, 0, 1]
+
+
+def test_manual_picks_the_index_even_when_others_have_higher_confidence(
+        sample_candidates):
+    # selected_grasp_index=0 puts the low-confidence grasp at the head
+    # exactly because the caller asked for it; the fallback is then
+    # sorted by confidence so 2 (0.80) comes next, not 1 (None).
+    ordered = planning_helpers.order_grasp_candidates(
+        sample_candidates, selection_mode='manual',
+        selected_grasp_index=0)
+    assert [idx for idx, _ in ordered] == [0, 2, 3, 1]
 
 
 def test_manual_index_clamped_to_range(sample_candidates):
@@ -169,6 +195,59 @@ def test_empty_list_returns_empty():
         [], 'highest_confidence', 0) == []
     assert planning_helpers.order_grasp_candidates(
         [], 'manual', 0) == []
+    assert planning_helpers.order_grasp_candidates(
+        [], 'multi_criteria', 0) == []
+
+
+# ---------------------------------------------------------------------------
+# multi_criteria mode
+# ---------------------------------------------------------------------------
+
+def test_multi_criteria_prefers_higher_combined_score():
+    # Two grasps with identical pose -> confidence decides the order.
+    candidates = [
+        FakeCandidate(confidence=0.2, pose=_pose(0.5, 0.0, 0.0)),
+        FakeCandidate(confidence=0.9, pose=_pose(0.5, 0.0, 0.0)),
+    ]
+    ordered = planning_helpers.order_grasp_candidates(
+        candidates, 'multi_criteria', 0)
+    assert [i for i, _ in ordered] == [1, 0]
+
+
+def test_multi_criteria_uses_reachability_to_break_confidence_ties():
+    # Same confidence but pose 1 sits at the sweet spot, pose 0 is far.
+    candidates = [
+        FakeCandidate(confidence=0.5, pose=_pose(2.0, 0.0, 0.0)),  # unreachable
+        FakeCandidate(confidence=0.5, pose=_pose(0.5, 0.0, 0.0)),  # sweet spot
+    ]
+    ordered = planning_helpers.order_grasp_candidates(
+        candidates, 'multi_criteria', 0)
+    assert [i for i, _ in ordered] == [1, 0]
+
+
+def test_multi_criteria_weights_can_disable_confidence():
+    # With confidence weight 0, the lower-confidence but better-placed
+    # grasp wins on reach alone.
+    candidates = [
+        FakeCandidate(confidence=0.9, pose=_pose(2.0, 0.0, 0.0)),
+        FakeCandidate(confidence=0.1, pose=_pose(0.5, 0.0, 0.0)),
+    ]
+    ordered = planning_helpers.order_grasp_candidates(
+        candidates, 'multi_criteria', 0,
+        multi_criteria_weights={'confidence': 0.0, 'reach': 1.0, 'height': 0.0})
+    assert [i for i, _ in ordered] == [1, 0]
+
+
+def test_multi_criteria_handles_none_confidence():
+    # None confidence is treated as 0 so the scored candidate still
+    # wins on the confidence term.
+    candidates = [
+        FakeCandidate(confidence=None, pose=_pose(0.5, 0.0, 0.0)),
+        FakeCandidate(confidence=0.3, pose=_pose(0.5, 0.0, 0.0)),
+    ]
+    ordered = planning_helpers.order_grasp_candidates(
+        candidates, 'multi_criteria', 0)
+    assert [i for i, _ in ordered] == [1, 0]
 
 
 # ---------------------------------------------------------------------------
