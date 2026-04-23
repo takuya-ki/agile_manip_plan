@@ -149,6 +149,11 @@ class DynamicReplanPlanner(Node):
         self._startup_t0 = time.monotonic()
 
         self.publish_joint_state(HOME_JOINTS)
+        # Continuously re-emit HOME joints so robot_state_publisher keeps
+        # a fresh set of TFs alive and RViz's RobotModel display does
+        # not go stale while we replan for many seconds. 30 Hz is cheap
+        # and matches the typical RViz refresh rate.
+        self.create_timer(1.0 / 30.0, lambda: self.publish_joint_state(HOME_JOINTS))
         self.startup_timer = self.create_timer(1.0, self._startup)
 
     # ------------------------------------------------------------------
