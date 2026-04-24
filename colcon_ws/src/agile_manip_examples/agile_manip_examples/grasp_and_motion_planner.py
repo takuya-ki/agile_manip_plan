@@ -57,7 +57,7 @@ class GraspAndMotionPlanner(Node):
         self.declare_parameter('gripper_finger_joint_target', 0.0)
         self.declare_parameter('gripper_width_m', -1.0)
 
-        self.grasp_pub = self.create_publisher(
+        self.grasp_candidates_pub = self.create_publisher(
             PoseArray, f'{self.TOPIC_NAMESPACE}/grasp_candidates', 10)
         self.selected_pub = self.create_publisher(
             PoseStamped, f'{self.TOPIC_NAMESPACE}/selected_grasp', 10)
@@ -203,7 +203,7 @@ class GraspAndMotionPlanner(Node):
         header = Header(
             frame_id=self.get_parameter('world_frame').value,
             stamp=self.get_clock().now().to_msg())
-        self.grasp_pub.publish(PoseArray(header=header, poses=grasp_poses))
+        self.grasp_candidates_pub.publish(PoseArray(header=header, poses=grasp_poses))
         self.last_header = header
 
         # Queue every candidate so that if cuMotion rejects the top pick

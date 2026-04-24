@@ -296,6 +296,7 @@ class ObstacleAwareGraspAndMotionPlanner(Node):
         self.plan_next_candidate()
 
     def ordered_grasp_candidates(self, grasp_candidates):
+        """Return ``(original_index, candidate)`` pairs in selection order."""
         return order_grasp_candidates(
             grasp_candidates,
             self.get_parameter('selection_mode').value,
