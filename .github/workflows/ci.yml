@@ -23,10 +23,10 @@ jobs:
       - name: Install pytest
         run: pip install pytest
 
-      - name: Run planning_helpers unit tests
+      - name: Run host-runnable unit tests
         run: |
           python -m pytest \
-            colcon_ws/src/agile_manip_examples/test/test_planning_helpers.py \
+            colcon_ws/src/agile_manip_examples/test/ \
             -v
 
   # Build the Docker image to catch Dockerfile regressions. The CUDA
