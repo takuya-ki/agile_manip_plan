@@ -294,6 +294,33 @@ viable option on this scene. wros2's strength is elsewhere
 full force-closure guarantees) -- it is useful as a ground-truth /
 debugging baseline rather than a real-time planner.
 
+**Scaling with the grasp-count knob.** GraspGen's ``topk_num_grasps``
+and wros2's ``antipodal_grasp.max_samples`` both control how many
+grasps are returned per call. Per-call wall time on the same
+example mesh:
+
+| Grasp generator  | count knob           | typical grasps | median per call |
+|------------------|----------------------|----------------|-----------------|
+| GraspGen (GPU)   | topk_num_grasps=4    | 4              | ~1.6 s          |
+| GraspGen (GPU)   | topk_num_grasps=10   | 10             | ~1.4 s          |
+| GraspGen (GPU)   | topk_num_grasps=20   | 20             | ~1.2 s          |
+| GraspGen (GPU)   | topk_num_grasps=40   | 40             | ~1.1 s          |
+| wros2 (CPU)      | max_samples=2        | ~35            | ~80 s           |
+| wros2 (CPU)      | max_samples=4        | ~80            | ~680 s          |
+| wros2 (CPU)      | max_samples=8        | ~150           | ~940 s          |
+
+Reading the GraspGen row: the per-call time is dominated by neural
+network checkpoint reload (~1 s) that happens on every service
+call, so varying ``topk_num_grasps`` inside [4, 40] barely moves the
+clock -- the scaling is effectively flat. Only in warm, long-lived
+sessions does the core NN inference (~100 ms for 300 samples) show
+through.
+
+Reading the wros2 row: doubling ``max_samples`` roughly multiplies
+compute by the number of pairwise contact-point checks, giving
+super-linear growth (80 s → 680 s → 940 s). This is the standard
+combinatorial cost of analytical antipodal search.
+
 Reproduce:
 
 ```bash
@@ -347,12 +374,25 @@ OMPL sampling baselines edge out cuMotion, because cuMotion's CUDA
 kernel-launch / batch-setup overhead dominates when the actual
 optimisation is near-instant. cuMotion's advantage surfaces on
 cluttered scenes where sampling planners have to reject many
-candidate trajectories; an obstacle-rich version of this benchmark
-is a natural follow-up. The trajectories also differ in shape
-(cuMotion's is longer in joint-space here because it smooths towards
-a dynamically-feasible minimum-jerk path, while RRT* post-processes
-for minimum length only); compare them qualitatively in RViz by
-running each demo.
+candidate trajectories -- repeating the same 20-iteration benchmark
+with the obstacle_aware demo's static box attached to every goal
+(see ``obstacle_size_xyz`` / ``obstacle_center_xyz`` parameters on
+``benchmark_harness``) flips the ordering:
+
+| Motion planner (box obstacle attached) | success | median (ms) | p95 (ms) | median traj. length (m) |
+|----------------------------------------|---------|-------------|----------|-------------------------|
+| **cuMotion** (GPU, gradient)           | 20/20   | **398.5**   | 1205.7   | 0.753                   |
+| OMPL RRTConnect (CPU, sampling)        | 20/20   | 596.1       | 2156.1   | 0.825                   |
+| OMPL RRTstar (CPU, sampling)           | 20/20   | 528.3       | **795.9**| 0.753                   |
+
+cuMotion wins at the median by ~33 % and at p95 by ~44 % over
+RRTConnect, and is ~25 % faster than RRTstar at the median. RRT*
+keeps the tightest tail because its cost-optimising behaviour
+amortises well, but the median cost of resampling around the box
+still puts it behind cuMotion. The trajectories also differ in
+shape (cuMotion smooths towards a dynamically-feasible minimum-jerk
+path, while RRT* post-processes for minimum length only); compare
+them qualitatively in RViz by running each demo.
 
 Reproduce:
 

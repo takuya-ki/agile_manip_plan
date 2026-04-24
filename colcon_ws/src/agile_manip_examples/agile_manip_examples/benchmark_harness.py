@@ -19,11 +19,13 @@ import time
 from datetime import datetime
 
 import rclpy
+from geometry_msgs.msg import Pose
 from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import MoveItErrorCodes
+from moveit_msgs.msg import CollisionObject, MoveItErrorCodes
 from rclpy.action import ActionClient
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Empty
 from tf2_ros import Buffer, StaticTransformBroadcaster, TransformListener
 
@@ -120,6 +122,14 @@ class BenchmarkHarness(Node):
             f"/tmp/benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
         self.declare_parameter('sleep_between_iterations_sec', 0.2)
 
+        # Optional static box obstacle attached to every MoveGroup goal
+        # via ``planning_options.planning_scene_diff``. Setting
+        # ``obstacle_size_xyz`` to all-zeros disables it entirely (the
+        # default) so existing benchmarks keep the free-space behaviour.
+        self.declare_parameter('obstacle_center_xyz', [0.25, 0.0, 0.40])
+        self.declare_parameter('obstacle_size_xyz', [0.0, 0.0, 0.0])
+        self.declare_parameter('obstacle_frame', 'world')
+
         self.grasp_client = self.create_client(
             Empty, self.get_parameter('grasp_service_name').value)
         self.move_group_client = ActionClient(
@@ -215,6 +225,37 @@ class BenchmarkHarness(Node):
         outcome = result_future.result()
         return outcome.result if outcome is not None else None
 
+    def _make_obstacle_collision_object(self):
+        """Return a CollisionObject to attach to each goal, or None.
+
+        Skipped whenever every component of ``obstacle_size_xyz`` is
+        zero so the default benchmark stays in free space.
+        """
+        size = self.get_parameter('obstacle_size_xyz').value
+        if all(float(s) <= 0.0 for s in size):
+            return None
+        center = self.get_parameter('obstacle_center_xyz').value
+        frame = self.get_parameter('obstacle_frame').value
+
+        box = SolidPrimitive()
+        box.type = SolidPrimitive.BOX
+        box.dimensions = [float(size[0]), float(size[1]), float(size[2])]
+
+        pose = Pose()
+        pose.position.x = float(center[0])
+        pose.position.y = float(center[1])
+        pose.position.z = float(center[2])
+        pose.orientation.w = 1.0
+
+        collision = CollisionObject()
+        collision.header.frame_id = frame
+        collision.header.stamp = self.get_clock().now().to_msg()
+        collision.id = 'benchmark_obstacle'
+        collision.primitives = [box]
+        collision.primitive_poses = [pose]
+        collision.operation = CollisionObject.ADD
+        return collision
+
     def run_single_iteration(self, iteration_index):
         """Plan once and return a metrics dict (even on failure)."""
         selection_mode = self.get_parameter('selection_mode').value
@@ -250,6 +291,12 @@ class BenchmarkHarness(Node):
                 orientation_tolerance_rad=self.get_parameter(
                     'orientation_tolerance_rad').value,
             )
+            collision = self._make_obstacle_collision_object()
+            if collision is not None:
+                goal_msg.planning_options.planning_scene_diff.is_diff = True
+                goal_msg.planning_options.planning_scene_diff.world.collision_objects = [
+                    collision,
+                ]
             start = time.monotonic()
             result = self._send_goal_blocking(goal_msg)
             cumulative_ms += (time.monotonic() - start) * 1000.0
