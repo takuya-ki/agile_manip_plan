@@ -151,26 +151,54 @@ RUN keep_only() { \
         isaac_manipulator_interfaces \
         isaac_manipulator_ros_python_utils
 
-# cuMotion's Python planner node hard-imports ``nvblox_msgs.srv`` at
-# module load even when the ESDF path is disabled (``read_esdf_world``
-# stays False in this project). Lazy-import the symbol and strip the
-# ``nvblox_msgs`` rosdep entry from the package manifest so we can run
-# cuMotion without cloning the full Isaac ROS nvblox stack.
+# --------------------------------------------------------------
+# Load-bearing upstream patches -- read before modifying either.
+# --------------------------------------------------------------
+# Both of the blocks below are workarounds for things the upstream
+# Isaac ROS stack hard-couples to NVIDIA-only dependencies (nvblox +
+# VPI) that we intentionally do not vendor here. If either patch
+# silently stops applying -- for example because upstream refactors
+# the import line or renames the ament resource -- the Dockerfile
+# will still "succeed" but cuMotion will fail to import at runtime.
+# When bumping the pinned upstream commit, verify both steps still
+# produce the expected output (see in-line comments).
+
+# [PATCH 1] cuMotion's Python planner node hard-imports
+# ``nvblox_msgs.srv`` at module load even when the ESDF path is
+# disabled (``read_esdf_world`` stays False in this project).
+# Lazy-import the symbol and strip the ``nvblox_msgs`` rosdep entry
+# from the package manifest so we can run cuMotion without cloning
+# the full Isaac ROS nvblox stack.
+#
+# Regression signal: after a ``docker compose build`` run,
+#   grep '^from nvblox_msgs' /colcon_ws/src/isaac_ros_cumotion/isaac_ros_cumotion/isaac_ros_cumotion/cumotion_planner.py
+# must return nothing. If upstream moves the import to another line
+# or spells it differently, the sed above is a no-op and the
+# container fails at first cuMotion service call with ImportError.
 RUN sed -i \
     's|^from nvblox_msgs.srv import EsdfAndGradients$|try:\n    from nvblox_msgs.srv import EsdfAndGradients\nexcept ImportError:\n    EsdfAndGradients = None|' \
     /colcon_ws/src/isaac_ros_cumotion/isaac_ros_cumotion/isaac_ros_cumotion/cumotion_planner.py \
     && sed -i '/<depend>nvblox_msgs<\/depend>/d' \
-       /colcon_ws/src/isaac_ros_cumotion/isaac_ros_cumotion/package.xml
+       /colcon_ws/src/isaac_ros_cumotion/isaac_ros_cumotion/package.xml \
+    && ! grep -q '^from nvblox_msgs' \
+        /colcon_ws/src/isaac_ros_cumotion/isaac_ros_cumotion/isaac_ros_cumotion/cumotion_planner.py
 
-# Minimal stand-in for the ``isaac_ros_common`` package. The upstream
-# package requires NVIDIA VPI (libnvvpi4) which is not vendored here;
-# downstream cuMotion packages only consume the
+# [PATCH 2] Minimal stand-in for the ``isaac_ros_common`` package. The
+# upstream package requires NVIDIA VPI (libnvvpi4) which is not
+# vendored here; downstream cuMotion packages only consume the
 # ``isaac_ros_common_scripts_path`` / ``isaac_ros_common_cmake_path``
-# ament_index resources plus a handful of cmake helpers, so a stub that
-# installs those is enough. ``package.xml`` and ``CMakeLists.txt`` are
-# committed under ``docker/isaac_ros_common_stub/``; ``scripts/`` and
-# ``cmake/`` are copied from the upstream clone at build time so we
-# don't have to vendor the upstream content in git.
+# ament_index resources plus a handful of cmake helpers, so a stub
+# that installs those is enough. ``package.xml`` and
+# ``CMakeLists.txt`` are committed under
+# ``docker/isaac_ros_common_stub/``; ``scripts/`` and ``cmake/`` are
+# copied from the upstream clone at build time so we don't have to
+# vendor the upstream content in git.
+#
+# Regression signal: if upstream adds a new ament resource or a new
+# cmake macro that a downstream cuMotion package consumes, the build
+# here fails with a missing-resource / missing-macro error at
+# ``colcon build`` time. When that happens, copy the missing file
+# into the stub rather than pulling in the real ``isaac_ros_common``.
 COPY docker/isaac_ros_common_stub/ /colcon_ws/src/isaac_ros_common_stub/
 RUN mkdir -p /colcon_ws/src/isaac_ros_common_stub/scripts \
              /colcon_ws/src/isaac_ros_common_stub/cmake \
