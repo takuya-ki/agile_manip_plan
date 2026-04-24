@@ -45,6 +45,7 @@ from agile_manip_examples.cumotion_utils import (
     moveit_error_name,
 )
 from agile_manip_examples.graspgen_utils import (
+    GraspMarkerForwarder,
     collect_grasp_candidates,
     grasp_frames_already_published,
     load_grasp_scores,
@@ -132,6 +133,12 @@ class DynamicReplanPlanner(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = StaticTransformBroadcaster(self)
+        # Forwarder recolours the candidate gripper markers so the
+        # selected grasp is visibly highlighted in yellow; without it
+        # RViz would just show whatever latched MarkerArray an
+        # earlier planner left on /graspgen/object_and_grippers,
+        # making the highlight disagree with the actual cuMotion goal.
+        self.marker_forwarder = GraspMarkerForwarder(self)
 
         self._external_obstacle_xyz = None
         self._external_sub = self.create_subscription(
@@ -142,6 +149,7 @@ class DynamicReplanPlanner(Node):
         )
 
         self._selected_candidate = None
+        self._selected_index = None
         self._replan_in_flight = False
         self._replan_count = 0
         self._success_count = 0
@@ -259,10 +267,15 @@ class DynamicReplanPlanner(Node):
                     'multi_criteria_weight_reach').value,
             },
         )
-        _, self._selected_candidate = ordered[0]
+        self._selected_index, self._selected_candidate = ordered[0]
+        # Recolour the chosen gripper marker so the yellow highlight in
+        # RViz matches the pose cuMotion is actually being asked to
+        # reach. Without this the forwarder's latched MarkerArray from a
+        # previous demo could display a different gripper in yellow.
+        self.marker_forwarder.highlight_gripper(self._selected_index)
         self.get_logger().info(
-            f'Selected grasp confidence='
-            f'{self._selected_candidate.confidence}')
+            f'Selected grasp index={self._selected_index} '
+            f'confidence={self._selected_candidate.confidence}')
         return True
 
     # ------------------------------------------------------------------
