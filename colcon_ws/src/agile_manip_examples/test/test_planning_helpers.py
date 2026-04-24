@@ -365,3 +365,64 @@ def test_log_goal_residual_noop_when_no_pose():
     planning_helpers.log_goal_residual(logger, [[0, 0, 0, 0, 0, 0, 0]], None)
     assert logger.info_msgs == []
     assert logger.warn_msgs == []
+
+
+# ---------------------------------------------------------------------------
+# trajectory_jerk_metrics
+# ---------------------------------------------------------------------------
+
+def _fake_trajectory(points_positions, points_accelerations=None, dt=0.1):
+    """Build a stand-in RobotTrajectory-like object."""
+    points = []
+    for i, pos in enumerate(points_positions):
+        stamp = types.SimpleNamespace(sec=int(i * dt), nanosec=int((i * dt % 1) * 1e9))
+        pt = types.SimpleNamespace(
+            positions=list(pos),
+            accelerations=list(points_accelerations[i])
+                           if points_accelerations is not None else [],
+            time_from_start=stamp,
+        )
+        points.append(pt)
+    jt = types.SimpleNamespace(joint_trajectory=types.SimpleNamespace(points=points))
+    return jt
+
+
+def test_jerk_zero_for_constant_acceleration():
+    # 7-joint trajectory with acceleration vector constant in time ->
+    # zero jerk.
+    n = 6
+    accels = [[0.5] * 7 for _ in range(n)]
+    positions = [[0.0] * 7 for _ in range(n)]
+    traj = _fake_trajectory(positions, accels)
+    rms, mx = planning_helpers.trajectory_jerk_metrics(traj)
+    assert rms == pytest.approx(0.0, abs=1e-9)
+    assert mx == pytest.approx(0.0, abs=1e-9)
+
+
+def test_jerk_nonzero_when_acceleration_changes():
+    # Step in acceleration on one joint; expect finite non-zero jerk.
+    accels = [[0.0] * 7, [0.0] * 7, [1.0] + [0.0] * 6,
+              [1.0] + [0.0] * 6, [0.0] * 7, [0.0] * 7]
+    positions = [[0.0] * 7 for _ in range(len(accels))]
+    traj = _fake_trajectory(positions, accels, dt=0.1)
+    rms, mx = planning_helpers.trajectory_jerk_metrics(traj)
+    assert mx > 0.0
+    assert rms > 0.0
+
+
+def test_jerk_falls_back_to_positions_when_accel_missing():
+    # Cubic position profile on one joint -> jerk is the 3rd derivative
+    # coefficient (constant), magnitude 6 rad/s^3 for position = t^3.
+    dt = 0.1
+    positions = [[((i * dt) ** 3)] + [0.0] * 6 for i in range(8)]
+    traj = _fake_trajectory(positions, points_accelerations=None, dt=dt)
+    rms, mx = planning_helpers.trajectory_jerk_metrics(traj)
+    # Numerical 3rd-diff on t^3 gives ~6.0 once the discretisation
+    # settles; accept a wide tolerance because end-effects inflate max.
+    assert mx == pytest.approx(6.0, rel=0.2)
+
+
+def test_jerk_zero_for_short_trajectory():
+    traj = _fake_trajectory([[0.0] * 7, [0.1] * 7, [0.2] * 7])
+    rms, mx = planning_helpers.trajectory_jerk_metrics(traj)
+    assert rms == 0.0 and mx == 0.0

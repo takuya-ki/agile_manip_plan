@@ -174,6 +174,81 @@ def build_trajectory_path_marker(trajectory, world_frame, stamp,
     return marker
 
 
+def trajectory_jerk_metrics(robot_trajectory):
+    """Compute RMS and max jerk across a ``RobotTrajectory``.
+
+    Jerk is the third time-derivative of joint position (rad/s^3).
+    It captures how *smoothly* the arm would move through the plan
+    -- low jerk = comfortable / easy-on-hardware, high jerk = sharp
+    transitions that shake the robot. Trajectory length alone cannot
+    express this.
+
+    If the incoming trajectory's points already carry ``accelerations``
+    entries (MoveIt / cuMotion usually populate these), we numerically
+    differentiate them against ``time_from_start`` to get jerk.
+    Otherwise we fall back to differentiating positions twice. In both
+    cases we only look at the 7 arm joints we plan for; the gripper
+    column appended by :func:`expand_robot_trajectory` is ignored.
+
+    Returns ``(rms, max_abs)`` in rad/s^3 (or ``(0.0, 0.0)`` if the
+    trajectory is too short to differentiate).
+    """
+    points = list(robot_trajectory.joint_trajectory.points)
+    if len(points) < 4:
+        return 0.0, 0.0
+
+    def _to_seconds(stamp):
+        return float(stamp.sec) + float(stamp.nanosec) * 1e-9
+
+    times = [_to_seconds(p.time_from_start) for p in points]
+    # If cuMotion / OMPL return all-zero timestamps (seen occasionally
+    # on degenerate plans), manufacture a uniform 100 ms spacing so
+    # the metric is still defined rather than NaN.
+    if all(t == 0.0 for t in times):
+        times = [0.1 * i for i in range(len(points))]
+    # Guard against duplicated timestamps which would divide by zero.
+    dts = [max(times[i + 1] - times[i], 1e-6) for i in range(len(times) - 1)]
+
+    have_accel = all(len(p.accelerations) > 0 for p in points)
+    if have_accel:
+        # jerk[i] = (a[i+1] - a[i]) / dt[i]
+        n_joints = len(points[0].accelerations)
+        jerks = []
+        for i in range(len(points) - 1):
+            for j in range(n_joints):
+                jerks.append(
+                    (points[i + 1].accelerations[j]
+                     - points[i].accelerations[j]) / dts[i])
+    else:
+        # Fall back: velocity -> acceleration -> jerk from positions.
+        n_joints = len(points[0].positions)
+        # Velocities at midpoints between waypoints.
+        velocities = [
+            [(points[i + 1].positions[j] - points[i].positions[j]) / dts[i]
+             for j in range(n_joints)]
+            for i in range(len(points) - 1)
+        ]
+        # Accelerations via central differences on velocities.
+        accels = [
+            [(velocities[i + 1][j] - velocities[i][j])
+             / (0.5 * (dts[i] + dts[i + 1]))
+             for j in range(n_joints)]
+            for i in range(len(velocities) - 1)
+        ]
+        # Jerks = finite diff of accelerations.
+        jerks = []
+        for i in range(len(accels) - 1):
+            step = 0.5 * (dts[i + 1] + dts[i + 2])
+            for j in range(n_joints):
+                jerks.append((accels[i + 1][j] - accels[i][j]) / step)
+
+    if not jerks:
+        return 0.0, 0.0
+    rms = (sum(j * j for j in jerks) / len(jerks)) ** 0.5
+    max_abs = max(abs(j) for j in jerks)
+    return rms, max_abs
+
+
 def goal_residual_m(final_joints, selected_pose):
     """Euclidean distance between the trajectory end and the selected grasp.
 

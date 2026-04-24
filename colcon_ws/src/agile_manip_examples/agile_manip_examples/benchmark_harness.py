@@ -46,6 +46,7 @@ from agile_manip_examples.graspgen_utils import (
 from agile_manip_examples.planning_helpers import (
     goal_residual_m,
     order_grasp_candidates,
+    trajectory_jerk_metrics,
 )
 
 
@@ -57,6 +58,8 @@ CSV_COLUMNS = (
     'planning_time_ms',
     'num_waypoints',
     'trajectory_length_m',
+    'jerk_rms_rad_s3',
+    'jerk_max_rad_s3',
     'final_residual_mm',
     'error_code',
     'success',
@@ -317,6 +320,7 @@ class BenchmarkHarness(Node):
             num_waypoints = len(trajectory)
             trajectory_len = _trajectory_length_m(trajectory)
             residual_m = goal_residual_m(trajectory[-1], candidate.pose)
+            jerk_rms, jerk_max = trajectory_jerk_metrics(result.planned_trajectory)
             return {
                 'iteration': iteration_index,
                 'selection_mode': selection_mode,
@@ -327,6 +331,8 @@ class BenchmarkHarness(Node):
                 'planning_time_ms': f'{cumulative_ms:.2f}',
                 'num_waypoints': num_waypoints,
                 'trajectory_length_m': f'{trajectory_len:.4f}',
+                'jerk_rms_rad_s3': f'{jerk_rms:.3f}',
+                'jerk_max_rad_s3': f'{jerk_max:.3f}',
                 'final_residual_mm': f'{residual_m * 1000.0:.2f}',
                 'error_code': moveit_error_name(last_error),
                 'success': '1',
@@ -340,6 +346,8 @@ class BenchmarkHarness(Node):
             'planning_time_ms': f'{cumulative_ms:.2f}',
             'num_waypoints': 0,
             'trajectory_length_m': '0.0',
+            'jerk_rms_rad_s3': '',
+            'jerk_max_rad_s3': '',
             'final_residual_mm': '',
             'error_code': moveit_error_name(last_error),
             'success': '0',
@@ -392,6 +400,13 @@ class BenchmarkHarness(Node):
                      f'min={min(times):.2f} max={max(times):.2f}')
             log.info(f'  trajectory_len_m  median={statistics.median(lengths):.3f} '
                      f'mean={statistics.mean(lengths):.3f}')
+            jerks_rms = [float(r['jerk_rms_rad_s3']) for r in successful
+                         if r['jerk_rms_rad_s3']]
+            jerks_max = [float(r['jerk_max_rad_s3']) for r in successful
+                         if r['jerk_max_rad_s3']]
+            if jerks_rms:
+                log.info(f'  jerk_rms_rad/s3   median={statistics.median(jerks_rms):.2f} '
+                         f'max={max(jerks_max):.2f}')
         log.info(f'  csv: {csv_path}')
 
 
