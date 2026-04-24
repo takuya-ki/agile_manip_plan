@@ -22,22 +22,36 @@ ompl:
   start_state_max_bounds_error: 0.1
 
   planner_configs:
+    # RRTConnect kept as a baseline single-query sampling planner.
     RRTConnect:
       type: geometric::RRTConnect
       range: 0.0
+    # RRTstar: asymptotically optimal RRT (Karaman & Frazzoli, 2011).
     RRTstar:
       type: geometric::RRTstar
       range: 0.0
       goal_bias: 0.05
       delay_collision_checking: 1
-    PRMstar:
-      type: geometric::PRMstar
+    # BITstar: Batch Informed Trees (Gammell, Srinivasa, Barfoot 2015);
+    # uses heuristic-guided batches, consistently fast to a good
+    # solution on manipulator problems.
+    BITstar:
+      type: geometric::BITstar
+      samples_per_batch: 100
+      use_k_nearest: 1
+    # AITstar: Adaptively Informed Trees (Strub & Gammell, 2020);
+    # improves BIT* by anytime-refining the heuristic as samples
+    # accumulate.
+    AITstar:
+      type: geometric::AITstar
+      use_k_nearest: 1
 
   arm:
     planner_configs:
       - RRTConnect
       - RRTstar
-      - PRMstar
+      - BITstar
+      - AITstar
     default_planner_config: RRTConnect
     projection_evaluator: joints(iiwa_joint_1,iiwa_joint_2)
     longest_valid_segment_fraction: 0.005

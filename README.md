@@ -358,42 +358,56 @@ wros2 build wros2``) -- the main pipeline does not need it.
 ### Motion planner comparison
 
 Same pose goal, same scene, different motion planner. cuMotion
-(GPU, gradient-based) is compared against the two OMPL
-sampling-based baselines that ship with MoveIt: RRTConnect and
-RRTstar. All three pipelines run inside the same move_group, so the
-only difference is the `pipeline_id` / `planner_id` pair passed with
-the goal. Hardware: RTX 3090; 20 iterations; no obstacles.
+(GPU, gradient-based) is compared against four OMPL sampling-based
+baselines: the classic RRTConnect / RRTstar, and the modern
+informed planners BITstar (Batch Informed Trees) and AITstar
+(Adaptively Informed Trees). All pipelines run inside the same
+move_group, so the only difference is the `pipeline_id` /
+`planner_id` pair passed with the goal. Hardware: RTX 3090; 20
+iterations; no obstacles. Jerk is computed on the returned
+trajectory by differentiating the ``accelerations`` field and
+summarises how smooth the plan would feel on real hardware.
 
-| Motion planner                  | pipeline_id / planner_id          | success | median (ms) | p95 (ms) | median traj. length (m) |
-|---------------------------------|-----------------------------------|---------|-------------|----------|-------------------------|
-| **cuMotion** (GPU, gradient)    | `isaac_ros_cumotion` / `cuMotion` | 20/20   | 205.0       | 247.1    | 0.932                   |
-| OMPL RRTConnect (CPU, sampling) | `ompl` / `RRTConnect`             | 20/20   | **161.0**   | 187.3    | 0.322                   |
-| OMPL RRTstar (CPU, sampling)    | `ompl` / `RRTstar`                | 20/20   | 173.5       | 221.5    | 0.270                   |
+| Motion planner                    | pipeline_id / planner_id          | success | median (ms) | p95 (ms) | median traj. (m) | median jerk RMS (rad/s³) | median jerk max (rad/s³) |
+|-----------------------------------|-----------------------------------|---------|-------------|----------|------------------|--------------------------|--------------------------|
+| **cuMotion** (GPU, gradient)      | `isaac_ros_cumotion` / `cuMotion` | 20/20   | 235.8       | 249.4    | 0.325            | 48.6                     | 260.9                    |
+| OMPL RRTConnect (CPU, sampling)   | `ompl` / `RRTConnect`             | 20/20   | **124.4**   | 131.6    | 0.276            | 31.2                     | 228.0                    |
+| OMPL RRTstar (CPU, optimal)       | `ompl` / `RRTstar`                | 20/20   | 241.8       | 261.0    | 0.728            | **15.3**                 | **100.0**                |
+| OMPL BITstar (CPU, inform. batch) | `ompl` / `BITstar`                | 20/20   | 134.3       | 165.1    | 0.708            | 15.0                     | 100.6                    |
+| OMPL AITstar (CPU, inform.+adapt) | `ompl` / `AITstar`                | 20/20   | 265.6       | 290.9    | 0.276            | 31.2                     | 227.7                    |
 
-Reading the numbers honestly: on this trivial free-space problem the
-OMPL sampling baselines edge out cuMotion, because cuMotion's CUDA
+Reading the numbers honestly: on this trivial free-space problem
+RRTConnect and BITstar edge out cuMotion, because cuMotion's CUDA
 kernel-launch / batch-setup overhead dominates when the actual
-optimisation is near-instant. cuMotion's advantage surfaces on
-cluttered scenes where sampling planners have to reject many
-candidate trajectories -- repeating the same 20-iteration benchmark
-with the obstacle_aware demo's static box attached to every goal
-(see ``obstacle_size_xyz`` / ``obstacle_center_xyz`` parameters on
-``benchmark_harness``) flips the ordering:
+optimisation is near-instant. The two sampling families also diverge
+on trajectory cost: RRTConnect / AITstar happen to converge to short
+paths (0.28 m), while the cost-optimising RRTstar / BITstar keep
+searching inside the 5 s allowed budget and return longer but
+smoother trajectories (jerk RMS ~15 rad/s³). cuMotion's advantage
+surfaces on cluttered scenes where sampling planners have to reject
+many candidate trajectories -- repeating the same 20-iteration
+benchmark with the obstacle_aware demo's static box attached to
+every goal (see ``obstacle_size_xyz`` / ``obstacle_center_xyz``
+parameters on ``benchmark_harness``) flips the ordering:
 
-| Motion planner (box obstacle attached) | success | median (ms) | p95 (ms) | median traj. length (m) |
-|----------------------------------------|---------|-------------|----------|-------------------------|
-| **cuMotion** (GPU, gradient)           | 20/20   | **398.5**   | 1205.7   | 0.753                   |
-| OMPL RRTConnect (CPU, sampling)        | 20/20   | 596.1       | 2156.1   | 0.825                   |
-| OMPL RRTstar (CPU, sampling)           | 20/20   | 528.3       | **795.9**| 0.753                   |
+| Motion planner (box obstacle attached) | success | median (ms) | p95 (ms)  | median traj. (m) | median jerk RMS (rad/s³) | median jerk max (rad/s³) |
+|----------------------------------------|---------|-------------|-----------|------------------|--------------------------|--------------------------|
+| **cuMotion** (GPU, gradient)           | 20/20   | **432.1**   | **482.2** | 1.334            | 15.4                     | **89.6**                 |
+| OMPL RRTConnect                        | 20/20   | 748.3       | 806.1     | 0.761            | 16.0                     | 94.7                     |
+| OMPL RRTstar                           | 20/20   | 759.5       | 793.0     | 0.761            | **15.7**                 | 93.7                     |
+| OMPL BITstar                           | 20/20   | 462.2       | 717.3     | 1.145            | 19.1                     | 106.9                    |
+| OMPL AITstar                           | 20/20   | 457.6       | 497.1     | 0.762            | 15.9                     | 95.7                     |
 
-cuMotion wins at the median by ~33 % and at p95 by ~44 % over
-RRTConnect, and is ~25 % faster than RRTstar at the median. RRT*
-keeps the tightest tail because its cost-optimising behaviour
-amortises well, but the median cost of resampling around the box
-still puts it behind cuMotion. The trajectories also differ in
-shape (cuMotion smooths towards a dynamically-feasible minimum-jerk
-path, while RRT* post-processes for minimum length only); compare
-them qualitatively in RViz by running each demo.
+In the cluttered scene cuMotion and the two modern informed
+sampling planners (BITstar, AITstar) are all in the same ballpark.
+cuMotion still leads at both median and p95, with AITstar ~6 %
+slower at median and ~3 % slower at p95. The older RRTConnect /
+RRTstar baselines are ~60 % slower at the median, illustrating how
+much informed / anytime-optimal OMPL planners have closed the gap
+to GPU solvers. Jerk is nearly flat across the sampling family
+(their trajectories share the same time-optimal TOTG post-processor)
+while cuMotion delivers the tightest peak jerk, matching its
+design goal of dynamically-feasible minimum-jerk paths.
 
 Reproduce:
 
