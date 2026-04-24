@@ -2,3 +2,6 @@
 	path = colcon_ws/src/graspgen_ros
 	url = https://github.com/UOsaka-Harada-Laboratory/graspgen_ros.git
 	branch = main
+[submodule "colcon_ws/src/wros2_ros"]
+	path = colcon_ws/src/wros2_ros
+	url = https://github.com/UOsaka-Harada-Laboratory/wros2.git

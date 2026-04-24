@@ -267,6 +267,66 @@ Each run prints a summary on stdout and writes
 output path or any other parameter via the `ros2 run --ros-args -p`
 command that the wrapper expands.
 
+### Grasp generator comparison
+
+Head-to-head timing of the ``/generate_grasp`` service call against
+an analytical baseline. GraspGen (GPU, neural network) is compared
+with [wros2](https://github.com/UOsaka-Harada-Laboratory/wros2),
+which wraps the [WRS](https://github.com/wanweiwei07/wrs) analytic
+antipodal planner (CPU, geometric contact sampling). Both are given
+the same example mesh
+(``/share/obj_mesh/example.stl`` in the GraspGen container, the
+included milkcarton.stl for wros2). Hardware: RTX 3090 for GraspGen;
+CPU only for wros2. 10 timed iterations each; GraspGen times are
+end-to-end service round-trip (client-measured), wros2 times are
+server-side log-timestamp deltas because individual calls exceed
+typical client timeouts.
+
+| Grasp generator | backend             | typical grasps returned                | median per call | slowdown vs GraspGen |
+|-----------------|---------------------|----------------------------------------|-----------------|----------------------|
+| **GraspGen**    | GPU, neural network | 40 (top-k after 300 NN samples)        | **740 ms**      | 1×                   |
+| wros2 (WRS)     | CPU, analytical     | 24 – 104 (median 52, varies with mesh) | **145 s**       | ~196×                |
+
+Practical reading: the two tools sit in very different regimes. For
+closed-loop agile manipulation, sub-second GraspGen is the only
+viable option on this scene. wros2's strength is elsewhere
+(training-free, gives physically principled antipodal grasps with
+full force-closure guarantees) -- it is useful as a ground-truth /
+debugging baseline rather than a real-time planner.
+
+Reproduce:
+
+```bash
+# GraspGen side (already up via start_backends.sh)
+docker exec graspgen_container bash -lc "source /opt/ros/jazzy/setup.bash \
+  && python3 -c 'import rclpy,time,statistics; from std_srvs.srv import Empty; \
+rclpy.init(); n=rclpy.create_node(\"b\"); c=n.create_client(Empty,\"/generate_grasp\"); \
+c.wait_for_service(timeout_sec=5); \
+fut=c.call_async(Empty.Request()); rclpy.spin_until_future_complete(n,fut,timeout_sec=60); \
+T=[]; \
+[T.append((lambda t0: (rclpy.spin_until_future_complete(n, c.call_async(Empty.Request()), timeout_sec=60), (time.monotonic()-t0)*1000.0)[1])(time.monotonic())) for _ in range(10)]; \
+print(f\"N={len(T)} med={statistics.median(T):.1f}ms\")'"
+
+# wros2 side (separate container, start once):
+docker compose --profile wros2 up -d wros2
+docker exec -d wros2_jazzy_container bash -lc "source /opt/ros/jazzy/setup.bash \
+  && source /ros2_ws/install/setup.bash \
+  && ros2 run wros2_tutorials grasp_planning_service --ros-args \
+       --params-file /ros2_ws/src/wros2_tutorials/config/planner_params_robotiq140_single_example.yaml \
+       > /tmp/wros2_service.log 2>&1"
+# Each call may take tens of seconds to minutes; trigger N calls and
+# extract per-call intervals from the server log:
+for i in $(seq 1 10); do
+  docker exec wros2_jazzy_container bash -lc "source /opt/ros/jazzy/setup.bash \
+    && ros2 service call /plan_grasp std_srvs/srv/Empty > /dev/null"
+done
+docker exec wros2_jazzy_container bash -c "grep 'Number of generated grasps' /tmp/wros2_service.log"
+```
+
+Note: the wros2 container is gated by a Docker Compose profile so it
+only builds when explicitly requested (``docker compose --profile
+wros2 build wros2``) -- the main pipeline does not need it.
+
 ### Motion planner comparison
 
 Same pose goal, same scene, different motion planner. cuMotion

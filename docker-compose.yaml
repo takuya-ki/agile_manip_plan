@@ -92,6 +92,37 @@ services:
     stdin_open: true
     command: bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --executor sequential && source /ros2_ws/install/setup.bash && bash"
 
+  # wros2 is an optional analytical / geometry-based grasp planner
+  # (Wan et al., IEEE TRO 2021) used purely for head-to-head timing
+  # benchmarks against GraspGen. It runs on a different DDS domain
+  # so it never interferes with the default pipeline; cross-container
+  # benchmarking is performed by invoking the benchmark script
+  # directly inside ``wros2_jazzy_container``.
+  wros2:
+    container_name: wros2_jazzy_container
+    hostname: wros2
+    build:
+      context: ./colcon_ws/src/wros2_ros/docker
+      dockerfile: Dockerfile
+    profiles: ["wros2"]
+    volumes:
+      - ./colcon_ws/src/wros2_ros/ros2_ws/jazzy/src/wros2_tutorials:/ros2_ws/src/wros2_tutorials
+      - ./utils:/utils
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev:/dev
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTDDS_SHM_DISABLE=1
+      # Separate domain so wros2 cannot be confused with the GraspGen
+      # backend during benchmarking (no cross-talk risk).
+      - ROS_DOMAIN_ID=43
+    privileged: true
+    tty: true
+    stdin_open: true
+    command: bash -c "source /opt/ros/jazzy/setup.bash && cd /ros2_ws && colcon build --symlink-install --parallel-workers 1 && source install/setup.bash && bash"
+
 # Dedicated bridge network so DDS traffic stays between these two
 # containers. Because we no longer use ``network_mode: host``, the
 # host's own ROS processes (and other containers on the default
