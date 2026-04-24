@@ -9,9 +9,9 @@ colcon_ws/log/
 .vscode/
 .claude/
 .codex/
+.codex
 
 CLAUDE.md
-.codex
 
 utils/record_demo.sh
 dataset/video/
