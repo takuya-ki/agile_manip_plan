@@ -44,6 +44,7 @@ from agile_manip_examples.graspgen_utils import (
     transform_available,
 )
 from agile_manip_examples.planning_helpers import (
+    declare_pipeline_parameters,
     goal_residual_m,
     order_grasp_candidates,
     trajectory_jerk_metrics,
@@ -92,31 +93,7 @@ class BenchmarkHarness(Node):
 
         # Pipeline connection parameters -- match the existing planner
         # nodes so the same launch / backend setup can be reused.
-        self.declare_parameter('grasp_service_name', '/generate_grasp')
-        self.declare_parameter('move_group_action_name', 'cumotion/move_group')
-        self.declare_parameter('world_frame', 'world')
-        self.declare_parameter('object_frame', 'object')
-        self.declare_parameter('grasp_frame_prefix', 'grasp_')
-        self.declare_parameter('max_grasps', 32)
-        self.declare_parameter('max_consecutive_misses', 3)
-        self.declare_parameter('tf_lookup_timeout_sec', 0.2)
-        self.declare_parameter('result_collection_delay_sec', 0.5)
-        self.declare_parameter('grasp_result_path', '')
-        self.declare_parameter('publish_object_identity_tf', True)
-        self.declare_parameter('object_pose_xyz', [0.5, 0.0, 0.15])
-        self.declare_parameter('planner_group_name', 'arm')
-        self.declare_parameter('pipeline_id', 'isaac_ros_cumotion')
-        self.declare_parameter('planner_id', 'cuMotion')
-        self.declare_parameter('end_effector_link', 'grasp_frame')
-        self.declare_parameter('allowed_planning_time', 5.0)
-        self.declare_parameter('position_tolerance_m', 0.005)
-        self.declare_parameter('orientation_tolerance_rad', 0.05)
-
-        # Selection mode + multi_criteria weights (see planning_helpers).
-        self.declare_parameter('selection_mode', 'highest_confidence')
-        self.declare_parameter('selected_grasp_index', 0)
-        self.declare_parameter('multi_criteria_weight_confidence', 0.7)
-        self.declare_parameter('multi_criteria_weight_reach', 0.3)
+        declare_pipeline_parameters(self)
 
         # Benchmark control.
         self.declare_parameter('iterations', 20)

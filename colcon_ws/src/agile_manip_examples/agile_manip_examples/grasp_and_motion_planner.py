@@ -31,6 +31,7 @@ from agile_manip_examples.graspgen_utils import (
 )
 from agile_manip_examples.planning_helpers import (
     build_trajectory_path_marker,
+    declare_pipeline_parameters,
     log_goal_residual,
     order_grasp_candidates,
     resolve_gripper_value,
@@ -44,38 +45,11 @@ class GraspAndMotionPlanner(Node):
     def __init__(self):
         super().__init__('grasp_and_motion_planner')
 
-        self.declare_parameter('grasp_service_name', '/generate_grasp')
-        self.declare_parameter('move_group_action_name', 'cumotion/move_group')
-        self.declare_parameter('world_frame', 'world')
-        self.declare_parameter('object_frame', 'object')
-        self.declare_parameter('grasp_frame_prefix', 'grasp_')
-        self.declare_parameter('max_grasps', 32)
-        self.declare_parameter('max_consecutive_misses', 3)
-        self.declare_parameter('tf_lookup_timeout_sec', 0.2)
-        self.declare_parameter('result_collection_delay_sec', 0.5)
-        self.declare_parameter('grasp_result_path', '')
-        self.declare_parameter('publish_object_identity_tf', True)
-        self.declare_parameter('object_pose_xyz', [0.5, 0.0, 0.15])
-        self.declare_parameter('planner_group_name', 'arm')
-        self.declare_parameter('pipeline_id', 'isaac_ros_cumotion')
-        self.declare_parameter('planner_id', 'cuMotion')
-        self.declare_parameter('end_effector_link', 'grasp_frame')
-        self.declare_parameter('allowed_planning_time', 5.0)
-        self.declare_parameter('selected_grasp_index', 0)
-        # 'highest_confidence' (default) | 'multi_criteria' | 'manual'.
-        # multi_criteria blends GraspGen confidence with a reachability
-        # sub-score (distance from the iiwa's reach sweet spot).
-        # Weights are tunable below.
-        self.declare_parameter('selection_mode', 'highest_confidence')
-        self.declare_parameter('multi_criteria_weight_confidence', 0.7)
-        self.declare_parameter('multi_criteria_weight_reach', 0.3)
+        # Shared pipeline parameters (service names, frames, selection
+        # mode, tolerances, etc.) live in declare_pipeline_parameters
+        # so every planner node starts from the same defaults.
+        declare_pipeline_parameters(self)
         self.declare_parameter('playback_period_sec', 0.05)
-        # Pose goal tolerances -- exposed so tasks that need tighter or
-        # looser placement (dense clutter vs. fast free-space moves) can
-        # tune them without editing ``cumotion_utils.py``. Defaults match
-        # the previous hard-coded values so behaviour is unchanged.
-        self.declare_parameter('position_tolerance_m', 0.005)
-        self.declare_parameter('orientation_tolerance_rad', 0.05)
         # Gripper is driven independently of cuMotion (which only plans
         # the 7 iiwa joints). Keep it fully open during the demo by
         # default; set ``gripper_finger_joint_target`` (rad, 0 .. ~0.7)

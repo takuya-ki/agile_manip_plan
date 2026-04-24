@@ -43,6 +43,7 @@ from agile_manip_examples.graspgen_utils import (
 )
 from agile_manip_examples.planning_helpers import (
     build_trajectory_path_marker,
+    declare_pipeline_parameters,
     log_goal_residual,
     order_grasp_candidates,
     resolve_gripper_value,
@@ -57,33 +58,8 @@ class ObstacleAwareGraspAndMotionPlanner(Node):
     def __init__(self):
         super().__init__('obstacle_aware_grasp_and_motion_planner')
 
-        self.declare_parameter('grasp_service_name', '/generate_grasp')
-        self.declare_parameter('move_group_action_name', 'cumotion/move_group')
-        self.declare_parameter('world_frame', 'world')
-        self.declare_parameter('object_frame', 'object')
-        self.declare_parameter('grasp_frame_prefix', 'grasp_')
-        self.declare_parameter('max_grasps', 32)
-        self.declare_parameter('max_consecutive_misses', 3)
-        self.declare_parameter('tf_lookup_timeout_sec', 0.2)
-        self.declare_parameter('result_collection_delay_sec', 0.5)
-        self.declare_parameter('grasp_result_path', '')
-        self.declare_parameter('publish_object_identity_tf', True)
-        self.declare_parameter('object_pose_xyz', [0.5, 0.0, 0.15])
-        self.declare_parameter('planner_group_name', 'arm')
-        self.declare_parameter('pipeline_id', 'isaac_ros_cumotion')
-        self.declare_parameter('planner_id', 'cuMotion')
-        self.declare_parameter('end_effector_link', 'grasp_frame')
-        self.declare_parameter('allowed_planning_time', 5.0)
-        self.declare_parameter('selected_grasp_index', 0)
-        # See grasp_and_motion_planner.py for rationale.
-        self.declare_parameter('selection_mode', 'highest_confidence')
-        self.declare_parameter('multi_criteria_weight_confidence', 0.7)
-        self.declare_parameter('multi_criteria_weight_reach', 0.3)
+        declare_pipeline_parameters(self)
         self.declare_parameter('playback_period_sec', 0.05)
-        # See grasp_and_motion_planner.py for rationale; defaults match
-        # the previous hard-coded values.
-        self.declare_parameter('position_tolerance_m', 0.005)
-        self.declare_parameter('orientation_tolerance_rad', 0.05)
         # Static box obstacle fed to MoveIt's planning scene. Position
         # and size are tuned so that a naive straight-line approach from
         # the iiwa home pose to the grasp point is blocked, forcing

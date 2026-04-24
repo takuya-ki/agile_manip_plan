@@ -273,6 +273,45 @@ def goal_residual_m(final_joints, selected_pose):
     return ((bx - gx) ** 2 + (by - gy) ** 2 + (bz - gz) ** 2) ** 0.5
 
 
+def declare_pipeline_parameters(node, allowed_planning_time=5.0):
+    """Declare the ROS parameters shared by every GraspGen + cuMotion pipeline node.
+
+    All four planner nodes in this package (grasp_and_motion,
+    obstacle_aware, dynamic_replan, benchmark_harness) used to
+    re-declare the same 20-odd ROS parameters verbatim, which made
+    it too easy for defaults to drift between nodes. Centralise the
+    block here so the pipeline contract lives in one place; nodes
+    still layer any node-specific parameters on top afterwards.
+
+    ``allowed_planning_time`` is the one default that differs
+    meaningfully between use-cases (the dynamic replanner uses a
+    tighter budget), so it is a keyword argument.
+    """
+    node.declare_parameter('grasp_service_name', '/generate_grasp')
+    node.declare_parameter('move_group_action_name', 'cumotion/move_group')
+    node.declare_parameter('world_frame', 'world')
+    node.declare_parameter('object_frame', 'object')
+    node.declare_parameter('grasp_frame_prefix', 'grasp_')
+    node.declare_parameter('max_grasps', 32)
+    node.declare_parameter('max_consecutive_misses', 3)
+    node.declare_parameter('tf_lookup_timeout_sec', 0.2)
+    node.declare_parameter('result_collection_delay_sec', 0.5)
+    node.declare_parameter('grasp_result_path', '')
+    node.declare_parameter('publish_object_identity_tf', True)
+    node.declare_parameter('object_pose_xyz', [0.5, 0.0, 0.15])
+    node.declare_parameter('planner_group_name', 'arm')
+    node.declare_parameter('pipeline_id', 'isaac_ros_cumotion')
+    node.declare_parameter('planner_id', 'cuMotion')
+    node.declare_parameter('end_effector_link', 'grasp_frame')
+    node.declare_parameter('allowed_planning_time', float(allowed_planning_time))
+    node.declare_parameter('position_tolerance_m', 0.005)
+    node.declare_parameter('orientation_tolerance_rad', 0.05)
+    node.declare_parameter('selected_grasp_index', 0)
+    node.declare_parameter('selection_mode', 'highest_confidence')
+    node.declare_parameter('multi_criteria_weight_confidence', 0.7)
+    node.declare_parameter('multi_criteria_weight_reach', 0.3)
+
+
 def log_goal_residual(logger, trajectory, selected_pose, tolerance_m=0.02):
     """Log whether the trajectory end matches the selected grasp pose."""
     if not trajectory or selected_pose is None:
