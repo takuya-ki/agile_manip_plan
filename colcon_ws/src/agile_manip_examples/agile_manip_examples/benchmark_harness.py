@@ -400,13 +400,19 @@ class BenchmarkHarness(Node):
                      f'min={min(times):.2f} max={max(times):.2f}')
             log.info(f'  trajectory_len_m  median={statistics.median(lengths):.3f} '
                      f'mean={statistics.mean(lengths):.3f}')
-            jerks_rms = [float(r['jerk_rms_rad_s3']) for r in successful
-                         if r['jerk_rms_rad_s3']]
-            jerks_max = [float(r['jerk_max_rad_s3']) for r in successful
-                         if r['jerk_max_rad_s3']]
-            if jerks_rms:
-                log.info(f'  jerk_rms_rad/s3   median={statistics.median(jerks_rms):.2f} '
-                         f'max={max(jerks_max):.2f}')
+            # Keep the two jerk lists paired so the ``max(jerks_max)``
+            # below cannot be hit with an empty list when only one of
+            # the columns was populated for a row.
+            jerk_pairs = [
+                (float(r['jerk_rms_rad_s3']), float(r['jerk_max_rad_s3']))
+                for r in successful
+                if r['jerk_rms_rad_s3'] and r['jerk_max_rad_s3']
+            ]
+            if jerk_pairs:
+                rms_values = [p[0] for p in jerk_pairs]
+                max_values = [p[1] for p in jerk_pairs]
+                log.info(f'  jerk_rms_rad/s3   median={statistics.median(rms_values):.2f} '
+                         f'max={max(max_values):.2f}')
         log.info(f'  csv: {csv_path}')
 
 

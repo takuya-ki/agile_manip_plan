@@ -31,7 +31,16 @@ def _reachability_score(pose):
     Uses a cosine window so the score decays smoothly rather than with
     a sharp knee -- helps break ties between grasps that are all
     close-but-not-exactly at REACH_SWEET_SPOT_M.
+
+    Degenerate ``REACH_FALLOFF_M <= 0`` collapses the window to a
+    binary match/no-match so we never hit a division by zero if
+    someone tunes the constant to zero.
     """
+    if REACH_FALLOFF_M <= 0.0:
+        return 1.0 if (
+            abs((pose.position.x ** 2 + pose.position.y ** 2
+                 + pose.position.z ** 2) ** 0.5 - REACH_SWEET_SPOT_M)
+            < 1e-6) else 0.0
     dx = pose.position.x
     dy = pose.position.y
     dz = pose.position.z

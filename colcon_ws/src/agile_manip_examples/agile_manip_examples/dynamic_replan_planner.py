@@ -153,6 +153,7 @@ class DynamicReplanPlanner(Node):
         self._replan_in_flight = False
         self._replan_count = 0
         self._success_count = 0
+        self._skipped_tick_count = 0
         self._last_log_time = time.monotonic()
         self._startup_t0 = time.monotonic()
 
@@ -201,6 +202,12 @@ class DynamicReplanPlanner(Node):
             return
 
         rate_hz = float(self.get_parameter('replan_rate_hz').value)
+        if rate_hz <= 0.0:
+            self.get_logger().error(
+                f'replan_rate_hz must be > 0, got {rate_hz}; aborting.')
+            return
+        # Clamp to 0.1 Hz so a pathologically small (but positive) value
+        # cannot produce a multi-minute timer period that hangs the demo.
         period = 1.0 / max(rate_hz, 0.1)
         self.get_logger().info(
             f'=== Dynamic replanning at {rate_hz:.1f} Hz ===')
@@ -349,8 +356,17 @@ class DynamicReplanPlanner(Node):
     def _replan_tick(self):
         # Drop the tick if the previous plan is still in flight --
         # stacking goals on top of each other both stresses the action
-        # server and makes the replan-rate metric meaningless.
+        # server and makes the replan-rate metric meaningless. Count
+        # and log (throttled) dropped ticks so sustained backpressure
+        # is visible in the console rather than failing silently.
         if self._replan_in_flight or self._selected_candidate is None:
+            self._skipped_tick_count += 1
+            now = time.monotonic()
+            if now - self._last_log_time > 1.0:
+                self.get_logger().debug(
+                    f'Replan tick skipped (previous plan still pending); '
+                    f'skipped_total={self._skipped_tick_count}')
+                self._last_log_time = now
             return
 
         center = self._current_obstacle_center()

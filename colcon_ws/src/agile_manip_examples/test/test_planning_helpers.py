@@ -426,3 +426,45 @@ def test_jerk_zero_for_short_trajectory():
     traj = _fake_trajectory([[0.0] * 7, [0.1] * 7, [0.2] * 7])
     rms, mx = planning_helpers.trajectory_jerk_metrics(traj)
     assert rms == 0.0 and mx == 0.0
+
+
+def test_jerk_rms_matches_analytic_value():
+    # Known alternating-accel profile -> closed-form jerk.
+    # accels = [0, 1, 0, 1, 0, 1, 0] rad/s^2 on joint 0, dt=0.1 s.
+    # Each transition produces jerk magnitude 1/0.1 = 10 rad/s^3.
+    # rms over the 6 transitions is also 10.0 (all equal magnitude).
+    dt = 0.1
+    accels = [[0.0] * 7, [1.0] + [0.0] * 6, [0.0] * 7, [1.0] + [0.0] * 6,
+              [0.0] * 7, [1.0] + [0.0] * 6, [0.0] * 7]
+    positions = [[0.0] * 7 for _ in range(len(accels))]
+    traj = _fake_trajectory(positions, accels, dt=dt)
+    rms, mx = planning_helpers.trajectory_jerk_metrics(traj)
+    # Each transition contributes magnitude 10 on one joint, 0 on
+    # other six -> rms = sqrt(6 * 10^2 / 42) = sqrt(100/7) ≈ 3.78.
+    assert rms == pytest.approx((100.0 / 7.0) ** 0.5, rel=0.01)
+    assert mx == pytest.approx(10.0, rel=0.01)
+
+
+# ---------------------------------------------------------------------------
+# _reachability_score edge cases
+# ---------------------------------------------------------------------------
+
+def test_reach_score_peaks_at_sweet_spot():
+    pose = _pose(planning_helpers.REACH_SWEET_SPOT_M, 0.0, 0.0)
+    assert planning_helpers._reachability_score(pose) == pytest.approx(1.0)
+
+
+def test_reach_score_zero_beyond_falloff():
+    far = planning_helpers.REACH_SWEET_SPOT_M + planning_helpers.REACH_FALLOFF_M + 0.1
+    pose = _pose(far, 0.0, 0.0)
+    assert planning_helpers._reachability_score(pose) == 0.0
+
+
+def test_reach_score_survives_zero_falloff(monkeypatch):
+    # Degenerate tuning: falloff == 0. Must not divide by zero; instead
+    # collapse to a binary match at the sweet spot.
+    monkeypatch.setattr(planning_helpers, 'REACH_FALLOFF_M', 0.0)
+    hit = _pose(planning_helpers.REACH_SWEET_SPOT_M, 0.0, 0.0)
+    miss = _pose(planning_helpers.REACH_SWEET_SPOT_M + 0.1, 0.0, 0.0)
+    assert planning_helpers._reachability_score(hit) == 1.0
+    assert planning_helpers._reachability_score(miss) == 0.0
