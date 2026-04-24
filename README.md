@@ -178,7 +178,7 @@ at the home pose; only the planned trajectory -- the blue line
 strip -- morphs as the obstacle sweeps, so the replanning cadence is
 visible in RViz.
 
-<img src="dataset/demo/06_dynamic_replan_demo.png" width="640"></img>
+<img src="dataset/demo/06_dynamic_replan_demo.gif" width="640"></img>
 
 ```bash
 # host
@@ -321,32 +321,33 @@ compute by the number of pairwise contact-point checks, giving
 super-linear growth (80 s → 680 s → 940 s). This is the standard
 combinatorial cost of analytical antipodal search.
 
-Reproduce:
+Reproduce. Both sides are timed the same way: trigger the service
+N times with ``ros2 service call`` wrapped in ``time``, then read
+the per-call wall clock. For GraspGen the service returns in under
+a second so ``time`` is accurate; for wros2 a single call can take
+minutes, so the server log's ``Number of generated grasps`` entries
+give a tighter per-call duration via consecutive timestamps.
 
 ```bash
-# GraspGen side (already up via start_backends.sh)
-docker exec graspgen_container bash -lc "source /opt/ros/jazzy/setup.bash \
-  && python3 -c 'import rclpy,time,statistics; from std_srvs.srv import Empty; \
-rclpy.init(); n=rclpy.create_node(\"b\"); c=n.create_client(Empty,\"/generate_grasp\"); \
-c.wait_for_service(timeout_sec=5); \
-fut=c.call_async(Empty.Request()); rclpy.spin_until_future_complete(n,fut,timeout_sec=60); \
-T=[]; \
-[T.append((lambda t0: (rclpy.spin_until_future_complete(n, c.call_async(Empty.Request()), timeout_sec=60), (time.monotonic()-t0)*1000.0)[1])(time.monotonic())) for _ in range(10)]; \
-print(f\"N={len(T)} med={statistics.median(T):.1f}ms\")'"
+# GraspGen side -- make sure the backend is up first.
+bash utils/start_backends.sh
+for i in $(seq 1 10); do
+  docker exec graspgen_container bash -lc "source /opt/ros/jazzy/setup.bash \
+    && time ros2 service call /generate_grasp std_srvs/srv/Empty > /dev/null"
+done
 
-# wros2 side (separate container, start once):
+# wros2 side -- separate container, build and start once.
 docker compose --profile wros2 up -d wros2
 docker exec -d wros2_jazzy_container bash -lc "source /opt/ros/jazzy/setup.bash \
   && source /ros2_ws/install/setup.bash \
   && ros2 run wros2_tutorials grasp_planning_service --ros-args \
        --params-file /ros2_ws/src/wros2_tutorials/config/planner_params_robotiq140_single_example.yaml \
        > /tmp/wros2_service.log 2>&1"
-# Each call may take tens of seconds to minutes; trigger N calls and
-# extract per-call intervals from the server log:
 for i in $(seq 1 10); do
   docker exec wros2_jazzy_container bash -lc "source /opt/ros/jazzy/setup.bash \
     && ros2 service call /plan_grasp std_srvs/srv/Empty > /dev/null"
 done
+# Per-call server-side durations are the gaps between timestamps:
 docker exec wros2_jazzy_container bash -c "grep 'Number of generated grasps' /tmp/wros2_service.log"
 ```
 
